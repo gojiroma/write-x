@@ -152,6 +152,10 @@
             background-color: #ffff99;
             font-weight: bold;
         }
+
+        #file-input {
+            display: none;
+        }
     </style>
 </head>
 
@@ -168,6 +172,7 @@
     <div class="page-list-container">
         <div class="page-list" id="page-list"></div>
     </div>
+    <input type="file" id="file-input" accept=".json">
 
     <script>
         const LAST_OPENED_KEY = 'last_opened_page';
@@ -337,6 +342,54 @@
             return textarea.selectionStart === textarea.value.length;
         }
 
+        // JSONデータをエクスポート
+        function exportToJson() {
+            const data = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('wiki_') && !key.startsWith('wiki_meta_')) {
+                    const title = key.replace('wiki_', '');
+                    data[title] = {
+                        content: localStorage.getItem(key),
+                        meta: JSON.parse(localStorage.getItem(`wiki_meta_${title}`) || '{}')
+                    };
+                }
+            }
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'wiki_export.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // JSONデータをインポート
+        function importFromJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    for (const title in data) {
+                        localStorage.setItem(`wiki_${title}`, data[title].content);
+                        localStorage.setItem(`wiki_meta_${title}`, JSON.stringify(data[title].meta || { updatedAt: Date.now() }));
+                    }
+                    alert('インポートが完了しました。');
+                    updatePageList(currentFilter);
+                    updateRelatedPagesList();
+                } catch (error) {
+                    alert('インポートに失敗しました: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // ファイル選択をリセット
+        }
+
         // inputの入力時にコンテンツの存在をチェック
         document.getElementById('title-input').addEventListener('input', function (e) {
             const title = e.target.value.trim();
@@ -374,8 +427,18 @@
             const inputElement = document.getElementById('title-input');
             const textareaElement = document.getElementById('content-textarea');
 
+            // Ctrl+Sでエクスポート
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                exportToJson();
+            }
+            // Ctrl+Oでインポート
+            else if (e.ctrlKey && e.key === 'o') {
+                e.preventDefault();
+                document.getElementById('file-input').click();
+            }
             // textareaで下キーを押した時の処理
-            if (document.activeElement === textareaElement && e.key === 'ArrowDown' && isCursorAtEnd(textareaElement)) {
+            else if (document.activeElement === textareaElement && e.key === 'ArrowDown' && isCursorAtEnd(textareaElement)) {
                 e.preventDefault();
                 if (pageButtons.length === 0) return;
 
@@ -478,6 +541,9 @@
             isMouseOverList = false;
             updatePageList(document.getElementById('title-input').value);
         });
+
+        // ファイルインポートのイベントリスナー
+        document.getElementById('file-input').addEventListener('change', importFromJson);
 
         // 初期表示
         window.addEventListener('load', function () {
