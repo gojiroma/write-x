@@ -341,9 +341,7 @@
                     if (lastHoveredTitle !== page.title) {
                         playBeep();
                         lastHoveredTitle = page.title;
-                        document.getElementById('title-input').value = page.title;
-                        const content = localStorage.getItem(`wiki_${page.title}`);
-                        document.getElementById('content-textarea').value = content || '';
+                        updateHashAndLoadPage(page.title);
                     }
                 };
                 button.ondblclick = (e) => {
@@ -354,6 +352,7 @@
                         if (document.getElementById('title-input').value === page.title) {
                             document.getElementById('title-input').value = '';
                             document.getElementById('content-textarea').value = '';
+                            history.replaceState({ title: '' }, '', '#');
                         }
                         updatePageList(filter);
                     }
@@ -466,16 +465,44 @@
         }
 
         // ページを読み込み
-        function loadPage(title) {
+        function loadPage(title, pushState = true) {
             const content = localStorage.getItem(`wiki_${title}`);
             document.getElementById('title-input').value = title;
             document.getElementById('content-textarea').value = content || '';
             document.getElementById('content-textarea').focus();
             selectedIndex = -1;
             clearRelatedPagesHighlight();
-            playBeep(880, 0.1); // 確定時の高い音
+            playBeep(880, 0.1);
             updatePageList(currentFilter);
             updateRelatedPagesList();
+
+            // URLにページ名を反映
+            updateHash(title, pushState);
+        }
+
+        // ハッシュを更新してページを読み込み
+        function updateHashAndLoadPage(title) {
+            const content = localStorage.getItem(`wiki_${title}`);
+            document.getElementById('title-input').value = title;
+            document.getElementById('content-textarea').value = content || '';
+            selectedIndex = -1;
+            clearRelatedPagesHighlight();
+            playBeep(880, 0.1);
+            updatePageList(currentFilter);
+            updateRelatedPagesList();
+
+            // URLにページ名を反映
+            updateHash(title, true);
+        }
+
+        // ハッシュを更新
+        function updateHash(title, pushState) {
+            const encodedTitle = encodeURIComponent(title);
+            if (pushState) {
+                history.pushState({ title }, '', `#${encodedTitle}`);
+            } else {
+                history.replaceState({ title }, '', `#${encodedTitle}`);
+            }
         }
 
         // 新規作成
@@ -487,6 +514,7 @@
             clearRelatedPagesHighlight();
             updatePageList('');
             updateRelatedPagesList();
+            history.replaceState({ title: '' }, '', '#');
         }
 
         // textareaのカーソルが最終行末かどうかをチェック
@@ -623,10 +651,12 @@
                     const currentLine = getCurrentLine(textareaElement);
                     if (currentLine) {
                         const pageTitle = currentLine;
+                        const content = localStorage.getItem(`wiki_${pageTitle}`);
                         document.getElementById('title-input').value = pageTitle;
-                        document.getElementById('content-textarea').value = '';
+                        document.getElementById('content-textarea').value = content || '';
                         document.getElementById('content-textarea').focus();
-                        playBeep(880, 0.1); // 確定時の高い音
+                        playBeep(880, 0.1);
+                        updateHash(pageTitle, true);
                     }
                     shiftKeyPressCount = 0;
                 }
@@ -665,7 +695,7 @@
                 selectedIndex = selectedIndex === -1 || selectedIndex >= pageButtons.length - 1 ? 0 : selectedIndex + 1;
                 pageButtons[selectedIndex].classList.add('selected');
                 pageButtons[selectedIndex].scrollIntoView({ block: 'nearest' });
-                playBeep(); // 移動時のビープ音
+                playBeep();
 
                 // 選択したページの内容をtextareaに反映
                 const selectedTitle = pageButtons[selectedIndex].textContent;
@@ -673,6 +703,7 @@
                 document.getElementById('title-input').value = selectedTitle;
                 document.getElementById('content-textarea').value = content || '';
                 updateRelatedPagesList();
+                updateHash(selectedTitle, true);
             }
             // textareaで上キーを押した時の処理（リストナビゲーションモード時のみ）
             else if (document.activeElement === textareaElement && e.key === 'ArrowUp' && listNavigationMode) {
@@ -687,7 +718,7 @@
                 selectedIndex = selectedIndex <= 0 ? pageButtons.length - 1 : selectedIndex - 1;
                 pageButtons[selectedIndex].classList.add('selected');
                 pageButtons[selectedIndex].scrollIntoView({ block: 'nearest' });
-                playBeep(); // 移動時のビープ音
+                playBeep();
 
                 // 選択したページの内容をtextareaに反映
                 const selectedTitle = pageButtons[selectedIndex].textContent;
@@ -695,6 +726,7 @@
                 document.getElementById('title-input').value = selectedTitle;
                 document.getElementById('content-textarea').value = content || '';
                 updateRelatedPagesList();
+                updateHash(selectedTitle, true);
             }
             // textareaで右キーを押した時の処理（関連ページリストにフォーカス）
             else if (document.activeElement === textareaElement && e.key === 'ArrowRight' && isCursorAtEnd(textareaElement)) {
@@ -710,7 +742,7 @@
                 relatedPageButtons[relatedSelectedIndex].classList.add('selected');
                 relatedPageButtons[relatedSelectedIndex].focus();
                 relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
-                playBeep(); // 移動時のビープ音
+                playBeep();
 
                 // 5秒後にモードを解除
                 clearTimeout(relatedListNavigationTimeout);
@@ -732,7 +764,7 @@
                 relatedPageButtons[relatedSelectedIndex].classList.add('selected');
                 relatedPageButtons[relatedSelectedIndex].focus();
                 relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
-                playBeep(); // 移動時のビープ音
+                playBeep();
             }
             // 関連ページリストナビゲーションモード時の下キー処理
             else if (relatedListNavigationMode && e.key === 'ArrowDown') {
@@ -748,7 +780,7 @@
                 relatedPageButtons[relatedSelectedIndex].classList.add('selected');
                 relatedPageButtons[relatedSelectedIndex].focus();
                 relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
-                playBeep(); // 移動時のビープ音
+                playBeep();
             }
             // 関連ページリストナビゲーションモード時の左キー処理
             else if (relatedListNavigationMode && e.key === 'ArrowLeft') {
@@ -770,14 +802,15 @@
                     if (selectedElement.tagName === 'A') {
                         window.open(selectedElement.href, '_blank');
                         document.getElementById('content-textarea').focus();
-                        playBeep(880, 0.1); // 確定時の高い音
+                        playBeep(880, 0.1);
                     } else {
                         const selectedTitle = selectedElement.textContent;
                         const content = localStorage.getItem(`wiki_${selectedTitle}`);
                         document.getElementById('title-input').value = selectedTitle;
                         document.getElementById('content-textarea').value = content || '';
                         document.getElementById('content-textarea').focus();
-                        playBeep(880, 0.1); // 確定時の高い音
+                        playBeep(880, 0.1);
+                        updateHash(selectedTitle, true);
                     }
                     relatedListNavigationMode = false;
                 }
@@ -796,7 +829,7 @@
                 relatedPageButtons[relatedSelectedIndex].classList.add('selected');
                 relatedPageButtons[relatedSelectedIndex].focus();
                 relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
-                playBeep(); // 移動時のビープ音
+                playBeep();
 
                 // 5秒後にモードを解除
                 clearTimeout(relatedListNavigationTimeout);
@@ -825,7 +858,7 @@
                     relatedPageButtons[relatedSelectedIndex].classList.add('selected');
                     relatedPageButtons[relatedSelectedIndex].focus();
                     relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
-                    playBeep(); // 移動時のビープ音
+                    playBeep();
                 }
             }
             // 関連ページリストナビゲーションモード時のEnterキー処理
@@ -836,14 +869,15 @@
                     if (selectedElement.tagName === 'A') {
                         window.open(selectedElement.href, '_blank');
                         document.getElementById('content-textarea').focus();
-                        playBeep(880, 0.1); // 確定時の高い音
+                        playBeep(880, 0.1);
                     } else {
                         const selectedTitle = selectedElement.textContent;
                         const content = localStorage.getItem(`wiki_${selectedTitle}`);
                         document.getElementById('title-input').value = selectedTitle;
                         document.getElementById('content-textarea').value = content || '';
                         document.getElementById('content-textarea').focus();
-                        playBeep(880, 0.1); // 確定時の高い音
+                        playBeep(880, 0.1);
+                        updateHash(selectedTitle, true);
                     }
                     relatedListNavigationMode = false;
                 }
@@ -876,7 +910,7 @@
                 if (selectedIndex !== -1) {
                     pageButtons[selectedIndex].classList.add('selected');
                     pageButtons[selectedIndex].scrollIntoView({ block: 'nearest' });
-                    playBeep(); // 移動時のビープ音
+                    playBeep();
 
                     // 選択したページの内容をtextareaに反映
                     const selectedTitle = pageButtons[selectedIndex].textContent;
@@ -884,6 +918,7 @@
                     document.getElementById('title-input').value = selectedTitle;
                     document.getElementById('content-textarea').value = content || '';
                     updateRelatedPagesList();
+                    updateHash(selectedTitle, true);
                 }
             }
             // Tabキーでtextareaにフォーカス
@@ -991,14 +1026,29 @@
             }
         });
 
+        // popstateイベントでブラウザの戻る/進むに対応
+        window.addEventListener('popstate', function (e) {
+            const hash = decodeURIComponent(location.hash.substring(1));
+            if (hash) {
+                loadPage(hash, false);
+            } else {
+                newPage();
+            }
+        });
+
         // 初期表示
         window.addEventListener('load', function () {
             cleanEmptyEntries();
-            const lastOpenedTitle = localStorage.getItem(LAST_OPENED_KEY);
-            if (lastOpenedTitle) {
-                loadPage(lastOpenedTitle);
+            const hash = decodeURIComponent(location.hash.substring(1));
+            if (hash) {
+                loadPage(hash, false);
             } else {
-                document.getElementById('title-input').focus();
+                const lastOpenedTitle = localStorage.getItem(LAST_OPENED_KEY);
+                if (lastOpenedTitle) {
+                    loadPage(lastOpenedTitle, false);
+                } else {
+                    newPage();
+                }
             }
             updatePageList();
             updateRelatedPagesList();
