@@ -101,6 +101,7 @@
             z-index: 20;
             max-height: 300px;
             overflow-y: auto;
+            overflow-x: hidden;
             display: none;
         }
 
@@ -112,9 +113,11 @@
             list-style: none;
             padding: 0;
             margin: 0;
+            white-space: nowrap;
         }
 
-        .related-pages-list button {
+        .related-pages-list button,
+        .related-pages-list a.related-url-button {
             display: block;
             width: 100%;
             text-align: left;
@@ -124,14 +127,26 @@
             border: none;
             cursor: pointer;
             border-bottom: 1px solid #eee;
+            text-align: left;
+            text-decoration: none;
+            color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .related-pages-list a.related-url-button {
+            color: #0066cc;
         }
 
         .related-pages-list button:hover,
-        .related-pages-list button.selected {
+        .related-pages-list button.selected,
+        .related-pages-list a.related-url-button:hover,
+        .related-pages-list a.related-url-button.selected {
             background-color: #e8e8c8;
         }
 
-        .related-pages-list button:focus {
+        .related-pages-list button:focus,
+        .related-pages-list a.related-url-button:focus {
             outline: 2px solid #ff6b6b;
         }
 
@@ -230,6 +245,45 @@
         let relatedListNavigationMode = false;
         let listNavigationTimeout = null;
         let relatedListNavigationTimeout = null;
+        let audioContext = null;
+        let lastHoveredTitle = null;
+
+        // ビープ音を再生する関数
+        function playBeep(frequency = 440, duration = 0.1) {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.type = 'sine';
+            oscillator.frequency.value = frequency;
+            gainNode.gain.value = 0.1;
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        // ハイライトを解除する関数
+        function clearPageListHighlight() {
+            pageButtons.forEach(button => {
+                button.classList.remove('selected');
+            });
+            selectedIndex = -1;
+        }
+
+        // 関連ページリストのハイライトを解除する関数
+        function clearRelatedPagesHighlight() {
+            relatedPageButtons.forEach(button => {
+                button.classList.remove('selected');
+            });
+            relatedSelectedIndex = -1;
+        }
 
         // 空のエントリを削除
         function cleanEmptyEntries() {
@@ -281,7 +335,15 @@
                     button.textContent = page.title;
                 }
                 button.onclick = () => loadPage(page.title);
-                button.onmouseenter = () => loadPage(page.title);
+                button.onmouseenter = () => {
+                    if (lastHoveredTitle !== page.title) {
+                        playBeep();
+                        lastHoveredTitle = page.title;
+                        document.getElementById('title-input').value = page.title;
+                        const content = localStorage.getItem(`wiki_${page.title}`);
+                        document.getElementById('content-textarea').value = content || '';
+                    }
+                };
                 button.ondblclick = (e) => {
                     e.stopPropagation();
                     if (confirm(`${page.title}を削除しますか？`)) {
@@ -340,29 +402,50 @@
                 const contentInTitle = page.content.includes(currentTitle);
 
                 if (titleInContent || contentInTitle) {
-                    foundTitles.push(page.title);
+                    foundTitles.push(page);
                 }
             });
 
             // 関連ページがあればリストを表示
             if (foundTitles.length > 0) {
-                foundTitles.forEach(title => {
-                    const button = document.createElement('button');
-                    button.textContent = title;
-                    button.onclick = () => loadPage(title);
-                    list.appendChild(button);
-                    relatedPageButtons.push(button);
+                foundTitles.forEach(page => {
+                    const pageButton = document.createElement('button');
+                    pageButton.textContent = page.title;
+                    pageButton.onclick = () => {
+                        clearPageListHighlight();
+                        loadPage(page.title);
+                        clearRelatedPagesHighlight();
+                    };
+                    list.appendChild(pageButton);
+                    relatedPageButtons.push(pageButton);
                 });
+            }
+
+            // 現在のtextareaの内容からURLを抽出・表示
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const urls = text.match(urlRegex);
+            if (urls) {
+                urls.forEach(url => {
+                    const urlButton = document.createElement('a');
+                    urlButton.href = url;
+                    urlButton.textContent = url;
+                    urlButton.target = '_blank';
+                    urlButton.rel = 'noopener noreferrer';
+                    urlButton.classList.add('related-url-button');
+                    urlButton.onclick = (e) => {
+                        e.preventDefault();
+                        window.open(urlButton.href, '_blank');
+                        document.getElementById('content-textarea').focus();
+                    };
+                    list.appendChild(urlButton);
+                    relatedPageButtons.push(urlButton);
+                });
+            }
+
+            if (foundTitles.length > 0 || urls) {
                 container.classList.add('show');
             } else {
                 container.classList.remove('show');
-            }
-
-            // 選択状態を更新
-            if (relatedSelectedIndex >= 0 && relatedSelectedIndex < relatedPageButtons.length) {
-                relatedPageButtons[relatedSelectedIndex].classList.add('selected');
-            } else {
-                relatedSelectedIndex = -1;
             }
         }
 
@@ -387,7 +470,8 @@
             document.getElementById('content-textarea').value = content || '';
             document.getElementById('content-textarea').focus();
             selectedIndex = -1;
-            relatedSelectedIndex = -1;
+            clearRelatedPagesHighlight();
+            playBeep(880, 0.1); // 確定時の高い音
             updatePageList(currentFilter);
             updateRelatedPagesList();
         }
@@ -398,7 +482,7 @@
             document.getElementById('content-textarea').value = '';
             document.getElementById('title-input').focus();
             selectedIndex = -1;
-            relatedSelectedIndex = -1;
+            clearRelatedPagesHighlight();
             updatePageList('');
             updateRelatedPagesList();
         }
@@ -492,6 +576,16 @@
         // フォーカス移動時の更新
         document.getElementById('content-textarea').addEventListener('focus', updateRelatedPagesList);
         document.getElementById('title-input').addEventListener('focus', function () {
+            document.getElementById('title-input').value = '';
+            document.getElementById('content-textarea').value = '';
+            updatePageList('');
+            updateRelatedPagesList();
+        });
+
+        // inputをクリックしたときに空欄にする
+        document.getElementById('title-input').addEventListener('click', function () {
+            document.getElementById('title-input').value = '';
+            document.getElementById('content-textarea').value = '';
             updatePageList('');
             updateRelatedPagesList();
         });
@@ -535,6 +629,7 @@
                 selectedIndex = selectedIndex === -1 || selectedIndex >= pageButtons.length - 1 ? 0 : selectedIndex + 1;
                 pageButtons[selectedIndex].classList.add('selected');
                 pageButtons[selectedIndex].scrollIntoView({ block: 'nearest' });
+                playBeep(); // 移動時のビープ音
 
                 // 選択したページの内容をtextareaに反映
                 const selectedTitle = pageButtons[selectedIndex].textContent;
@@ -556,6 +651,7 @@
                 selectedIndex = selectedIndex <= 0 ? pageButtons.length - 1 : selectedIndex - 1;
                 pageButtons[selectedIndex].classList.add('selected');
                 pageButtons[selectedIndex].scrollIntoView({ block: 'nearest' });
+                playBeep(); // 移動時のビープ音
 
                 // 選択したページの内容をtextareaに反映
                 const selectedTitle = pageButtons[selectedIndex].textContent;
@@ -571,18 +667,14 @@
 
                 // 関連ページリストナビゲーションモード開始
                 relatedListNavigationMode = true;
-
-                // ページリストのハイライトを解除
-                if (selectedIndex !== -1) {
-                    pageButtons[selectedIndex].classList.remove('selected');
-                    selectedIndex = -1;
-                }
+                clearPageListHighlight();
 
                 // 関連ページリストの最初の項目を選択
                 relatedSelectedIndex = 0;
                 relatedPageButtons[relatedSelectedIndex].classList.add('selected');
                 relatedPageButtons[relatedSelectedIndex].focus();
                 relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
+                playBeep(); // 移動時のビープ音
 
                 // 5秒後にモードを解除
                 clearTimeout(relatedListNavigationTimeout);
@@ -591,7 +683,7 @@
                 }, 5000);
             }
             // 関連ページリストナビゲーションモード時の上下キー処理
-            else if (relatedListNavigationMode && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            else if (relatedListNavigationMode && e.key === 'ArrowUp') {
                 e.preventDefault();
                 if (relatedPageButtons.length === 0) return;
 
@@ -600,28 +692,57 @@
                     relatedPageButtons[relatedSelectedIndex].classList.remove('selected');
                 }
 
-                if (e.key === 'ArrowUp') {
-                    relatedSelectedIndex = relatedSelectedIndex <= 0 ? relatedPageButtons.length - 1 : relatedSelectedIndex - 1;
-                } else if (e.key === 'ArrowDown') {
-                    relatedSelectedIndex = relatedSelectedIndex === -1 || relatedSelectedIndex >= relatedPageButtons.length - 1 ? 0 : relatedSelectedIndex + 1;
+                relatedSelectedIndex = relatedSelectedIndex <= 0 ? relatedPageButtons.length - 1 : relatedSelectedIndex - 1;
+                relatedPageButtons[relatedSelectedIndex].classList.add('selected');
+                relatedPageButtons[relatedSelectedIndex].focus();
+                relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
+                playBeep(); // 移動時のビープ音
+            }
+            // 関連ページリストナビゲーションモード時の下キー処理
+            else if (relatedListNavigationMode && e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (relatedPageButtons.length === 0) return;
+
+                // 選択解除
+                if (relatedSelectedIndex !== -1) {
+                    relatedPageButtons[relatedSelectedIndex].classList.remove('selected');
                 }
 
-                // 選択適用
+                relatedSelectedIndex = relatedSelectedIndex === -1 || relatedSelectedIndex >= relatedPageButtons.length - 1 ? 0 : relatedSelectedIndex + 1;
+                relatedPageButtons[relatedSelectedIndex].classList.add('selected');
+                relatedPageButtons[relatedSelectedIndex].focus();
+                relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
+                playBeep(); // 移動時のビープ音
+            }
+            // 関連ページリストナビゲーションモード時の左キー処理
+            else if (relatedListNavigationMode && e.key === 'ArrowLeft') {
+                e.preventDefault();
+                // ハイライトを解除
                 if (relatedSelectedIndex !== -1) {
-                    relatedPageButtons[relatedSelectedIndex].classList.add('selected');
-                    relatedPageButtons[relatedSelectedIndex].focus();
-                    relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
+                    relatedPageButtons[relatedSelectedIndex].classList.remove('selected');
+                    relatedSelectedIndex = -1;
                 }
+                // textareaにフォーカスを戻す
+                document.getElementById('content-textarea').focus();
+                relatedListNavigationMode = false;
             }
             // 関連ページリストナビゲーションモード時のEnterキー処理
             else if (relatedListNavigationMode && e.key === 'Enter') {
                 e.preventDefault();
                 if (relatedSelectedIndex !== -1) {
-                    const selectedTitle = relatedPageButtons[relatedSelectedIndex].textContent;
-                    const content = localStorage.getItem(`wiki_${selectedTitle}`);
-                    document.getElementById('title-input').value = selectedTitle;
-                    document.getElementById('content-textarea').value = content || '';
-                    document.getElementById('content-textarea').focus();
+                    const selectedElement = relatedPageButtons[relatedSelectedIndex];
+                    if (selectedElement.tagName === 'A') {
+                        window.open(selectedElement.href, '_blank');
+                        document.getElementById('content-textarea').focus();
+                        playBeep(880, 0.1); // 確定時の高い音
+                    } else {
+                        const selectedTitle = selectedElement.textContent;
+                        const content = localStorage.getItem(`wiki_${selectedTitle}`);
+                        document.getElementById('title-input').value = selectedTitle;
+                        document.getElementById('content-textarea').value = content || '';
+                        document.getElementById('content-textarea').focus();
+                        playBeep(880, 0.1); // 確定時の高い音
+                    }
                     relatedListNavigationMode = false;
                 }
             }
@@ -632,18 +753,14 @@
 
                 // 関連ページリストナビゲーションモード開始
                 relatedListNavigationMode = true;
-
-                // ページリストのハイライトを解除
-                if (selectedIndex !== -1) {
-                    pageButtons[selectedIndex].classList.remove('selected');
-                    selectedIndex = -1;
-                }
+                clearPageListHighlight();
 
                 // 関連ページリストの最初の項目を選択
                 relatedSelectedIndex = 0;
                 relatedPageButtons[relatedSelectedIndex].classList.add('selected');
                 relatedPageButtons[relatedSelectedIndex].focus();
                 relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
+                playBeep(); // 移動時のビープ音
 
                 // 5秒後にモードを解除
                 clearTimeout(relatedListNavigationTimeout);
@@ -672,17 +789,26 @@
                     relatedPageButtons[relatedSelectedIndex].classList.add('selected');
                     relatedPageButtons[relatedSelectedIndex].focus();
                     relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
+                    playBeep(); // 移動時のビープ音
                 }
             }
             // 関連ページリストナビゲーションモード時のEnterキー処理
             else if (relatedListNavigationMode && e.key === 'Enter') {
                 e.preventDefault();
                 if (relatedSelectedIndex !== -1) {
-                    const selectedTitle = relatedPageButtons[relatedSelectedIndex].textContent;
-                    const content = localStorage.getItem(`wiki_${selectedTitle}`);
-                    document.getElementById('title-input').value = selectedTitle;
-                    document.getElementById('content-textarea').value = content || '';
-                    document.getElementById('content-textarea').focus();
+                    const selectedElement = relatedPageButtons[relatedSelectedIndex];
+                    if (selectedElement.tagName === 'A') {
+                        window.open(selectedElement.href, '_blank');
+                        document.getElementById('content-textarea').focus();
+                        playBeep(880, 0.1); // 確定時の高い音
+                    } else {
+                        const selectedTitle = selectedElement.textContent;
+                        const content = localStorage.getItem(`wiki_${selectedTitle}`);
+                        document.getElementById('title-input').value = selectedTitle;
+                        document.getElementById('content-textarea').value = content || '';
+                        document.getElementById('content-textarea').focus();
+                        playBeep(880, 0.1); // 確定時の高い音
+                    }
                     relatedListNavigationMode = false;
                 }
             }
@@ -714,6 +840,8 @@
                 if (selectedIndex !== -1) {
                     pageButtons[selectedIndex].classList.add('selected');
                     pageButtons[selectedIndex].scrollIntoView({ block: 'nearest' });
+                    playBeep(); // 移動時のビープ音
+
                     // 選択したページの内容をtextareaに反映
                     const selectedTitle = pageButtons[selectedIndex].textContent;
                     const content = localStorage.getItem(`wiki_${selectedTitle}`);
@@ -801,6 +929,19 @@
         // インポートボタンのイベントリスナー
         document.getElementById('import-button').addEventListener('click', () => {
             document.getElementById('file-input').click();
+        });
+
+        // ページの空白部分をクリックした際のフォーカス制御
+        document.addEventListener('click', function (e) {
+            if (e.target === document.body || e.target === document.documentElement) {
+                const textarea = document.getElementById('content-textarea');
+                const input = document.getElementById('title-input');
+                if (textarea.value.trim() === '') {
+                    input.focus();
+                } else {
+                    textarea.focus();
+                }
+            }
         });
 
         // 初期表示
