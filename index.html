@@ -18,17 +18,18 @@
             min-height: 100vh;
             margin: 0;
             position: relative;
+            overflow-y: hidden;
         }
 
         .side-buttons {
             position: fixed;
             left: 10px;
-            top: 50%;
-            transform: translateY(-50%);
+            bottom: 1%;
             display: flex;
             flex-direction: column;
             gap: 10px;
             z-index: 30;
+            opacity: 0.2;
         }
 
         .side-button {
@@ -42,8 +43,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
-            transition: background-color 0.2s;
+            font-size: 15px;
         }
 
         .side-button:hover {
@@ -126,8 +126,13 @@
             border-bottom: 1px solid #eee;
         }
 
-        .related-pages-list button:hover {
+        .related-pages-list button:hover,
+        .related-pages-list button.selected {
             background-color: #e8e8c8;
+        }
+
+        .related-pages-list button:focus {
+            outline: 2px solid #ff6b6b;
         }
 
         ::selection {
@@ -160,6 +165,8 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             z-index: 10;
             width: 100%;
+            max-height: 50vh;
+            overflow-y: auto;
         }
 
         .page-list button {
@@ -192,8 +199,8 @@
 
 <body>
     <div class="side-buttons">
-        <button class="side-button" id="export-button" title="エクスポート (Ctrl+S)">↓</button>
-        <button class="side-button" id="import-button" title="インポート (Ctrl+O)">↑</button>
+        <button class="side-button" id="export-button" title="エクスポート (Ctrl+S)">出力</button>
+        <button class="side-button" id="import-button" title="インポート (Ctrl+O)">取込</button>
     </div>
 
     <div class="input-container">
@@ -215,10 +222,14 @@
         let isIMEComposing = false;
         let isMouseOverList = false;
         let selectedIndex = -1;
+        let relatedSelectedIndex = -1;
         let pageButtons = [];
+        let relatedPageButtons = [];
         let currentFilter = '';
         let listNavigationMode = false;
+        let relatedListNavigationMode = false;
         let listNavigationTimeout = null;
+        let relatedListNavigationTimeout = null;
 
         // 空のエントリを削除
         function cleanEmptyEntries() {
@@ -305,6 +316,7 @@
 
             // 既存のリストをクリア
             list.innerHTML = '';
+            relatedPageButtons = [];
 
             // ページタイトルとコンテンツを取得
             const pages = [];
@@ -339,10 +351,18 @@
                     button.textContent = title;
                     button.onclick = () => loadPage(title);
                     list.appendChild(button);
+                    relatedPageButtons.push(button);
                 });
                 container.classList.add('show');
             } else {
                 container.classList.remove('show');
+            }
+
+            // 選択状態を更新
+            if (relatedSelectedIndex >= 0 && relatedSelectedIndex < relatedPageButtons.length) {
+                relatedPageButtons[relatedSelectedIndex].classList.add('selected');
+            } else {
+                relatedSelectedIndex = -1;
             }
         }
 
@@ -367,6 +387,7 @@
             document.getElementById('content-textarea').value = content || '';
             document.getElementById('content-textarea').focus();
             selectedIndex = -1;
+            relatedSelectedIndex = -1;
             updatePageList(currentFilter);
             updateRelatedPagesList();
         }
@@ -377,6 +398,7 @@
             document.getElementById('content-textarea').value = '';
             document.getElementById('title-input').focus();
             selectedIndex = -1;
+            relatedSelectedIndex = -1;
             updatePageList('');
             updateRelatedPagesList();
         }
@@ -470,8 +492,6 @@
         // フォーカス移動時の更新
         document.getElementById('content-textarea').addEventListener('focus', updateRelatedPagesList);
         document.getElementById('title-input').addEventListener('focus', function () {
-            this.value = '';
-            document.getElementById('content-textarea').value = '';
             updatePageList('');
             updateRelatedPagesList();
         });
@@ -521,7 +541,7 @@
                 const content = localStorage.getItem(`wiki_${selectedTitle}`);
                 document.getElementById('title-input').value = selectedTitle;
                 document.getElementById('content-textarea').value = content || '';
-                updateRelatedPagesList(); // 関連ページリストを更新
+                updateRelatedPagesList();
             }
             // textareaで上キーを押した時の処理（リストナビゲーションモード時のみ）
             else if (document.activeElement === textareaElement && e.key === 'ArrowUp' && listNavigationMode) {
@@ -542,7 +562,129 @@
                 const content = localStorage.getItem(`wiki_${selectedTitle}`);
                 document.getElementById('title-input').value = selectedTitle;
                 document.getElementById('content-textarea').value = content || '';
-                updateRelatedPagesList(); // 関連ページリストを更新
+                updateRelatedPagesList();
+            }
+            // textareaで右キーを押した時の処理（関連ページリストにフォーカス）
+            else if (document.activeElement === textareaElement && e.key === 'ArrowRight' && isCursorAtEnd(textareaElement)) {
+                e.preventDefault();
+                if (relatedPageButtons.length === 0) return;
+
+                // 関連ページリストナビゲーションモード開始
+                relatedListNavigationMode = true;
+
+                // ページリストのハイライトを解除
+                if (selectedIndex !== -1) {
+                    pageButtons[selectedIndex].classList.remove('selected');
+                    selectedIndex = -1;
+                }
+
+                // 関連ページリストの最初の項目を選択
+                relatedSelectedIndex = 0;
+                relatedPageButtons[relatedSelectedIndex].classList.add('selected');
+                relatedPageButtons[relatedSelectedIndex].focus();
+                relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
+
+                // 5秒後にモードを解除
+                clearTimeout(relatedListNavigationTimeout);
+                relatedListNavigationTimeout = setTimeout(() => {
+                    relatedListNavigationMode = false;
+                }, 5000);
+            }
+            // 関連ページリストナビゲーションモード時の上下キー処理
+            else if (relatedListNavigationMode && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                e.preventDefault();
+                if (relatedPageButtons.length === 0) return;
+
+                // 選択解除
+                if (relatedSelectedIndex !== -1) {
+                    relatedPageButtons[relatedSelectedIndex].classList.remove('selected');
+                }
+
+                if (e.key === 'ArrowUp') {
+                    relatedSelectedIndex = relatedSelectedIndex <= 0 ? relatedPageButtons.length - 1 : relatedSelectedIndex - 1;
+                } else if (e.key === 'ArrowDown') {
+                    relatedSelectedIndex = relatedSelectedIndex === -1 || relatedSelectedIndex >= relatedPageButtons.length - 1 ? 0 : relatedSelectedIndex + 1;
+                }
+
+                // 選択適用
+                if (relatedSelectedIndex !== -1) {
+                    relatedPageButtons[relatedSelectedIndex].classList.add('selected');
+                    relatedPageButtons[relatedSelectedIndex].focus();
+                    relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
+                }
+            }
+            // 関連ページリストナビゲーションモード時のEnterキー処理
+            else if (relatedListNavigationMode && e.key === 'Enter') {
+                e.preventDefault();
+                if (relatedSelectedIndex !== -1) {
+                    const selectedTitle = relatedPageButtons[relatedSelectedIndex].textContent;
+                    const content = localStorage.getItem(`wiki_${selectedTitle}`);
+                    document.getElementById('title-input').value = selectedTitle;
+                    document.getElementById('content-textarea').value = content || '';
+                    document.getElementById('content-textarea').focus();
+                    relatedListNavigationMode = false;
+                }
+            }
+            // inputで右キーを押した時の処理（関連ページリストにフォーカス）
+            else if (document.activeElement === inputElement && e.key === 'ArrowRight' && inputElement.selectionStart === inputElement.value.length) {
+                e.preventDefault();
+                if (relatedPageButtons.length === 0) return;
+
+                // 関連ページリストナビゲーションモード開始
+                relatedListNavigationMode = true;
+
+                // ページリストのハイライトを解除
+                if (selectedIndex !== -1) {
+                    pageButtons[selectedIndex].classList.remove('selected');
+                    selectedIndex = -1;
+                }
+
+                // 関連ページリストの最初の項目を選択
+                relatedSelectedIndex = 0;
+                relatedPageButtons[relatedSelectedIndex].classList.add('selected');
+                relatedPageButtons[relatedSelectedIndex].focus();
+                relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
+
+                // 5秒後にモードを解除
+                clearTimeout(relatedListNavigationTimeout);
+                relatedListNavigationTimeout = setTimeout(() => {
+                    relatedListNavigationMode = false;
+                }, 5000);
+            }
+            // 関連ページリストナビゲーションモード時の上下キー処理
+            else if (relatedListNavigationMode && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                e.preventDefault();
+                if (relatedPageButtons.length === 0) return;
+
+                // 選択解除
+                if (relatedSelectedIndex !== -1) {
+                    relatedPageButtons[relatedSelectedIndex].classList.remove('selected');
+                }
+
+                if (e.key === 'ArrowUp') {
+                    relatedSelectedIndex = relatedSelectedIndex <= 0 ? relatedPageButtons.length - 1 : relatedSelectedIndex - 1;
+                } else if (e.key === 'ArrowDown') {
+                    relatedSelectedIndex = relatedSelectedIndex === -1 || relatedSelectedIndex >= relatedPageButtons.length - 1 ? 0 : relatedSelectedIndex + 1;
+                }
+
+                // 選択適用
+                if (relatedSelectedIndex !== -1) {
+                    relatedPageButtons[relatedSelectedIndex].classList.add('selected');
+                    relatedPageButtons[relatedSelectedIndex].focus();
+                    relatedPageButtons[relatedSelectedIndex].scrollIntoView({ block: 'nearest' });
+                }
+            }
+            // 関連ページリストナビゲーションモード時のEnterキー処理
+            else if (relatedListNavigationMode && e.key === 'Enter') {
+                e.preventDefault();
+                if (relatedSelectedIndex !== -1) {
+                    const selectedTitle = relatedPageButtons[relatedSelectedIndex].textContent;
+                    const content = localStorage.getItem(`wiki_${selectedTitle}`);
+                    document.getElementById('title-input').value = selectedTitle;
+                    document.getElementById('content-textarea').value = content || '';
+                    document.getElementById('content-textarea').focus();
+                    relatedListNavigationMode = false;
+                }
             }
             // IME入力中でない場合のみEnterキーでtextareaにフォーカス（textareaを空欄にする）
             else if (document.activeElement === inputElement && e.key === 'Enter' && !isIMEComposing) {
@@ -577,7 +719,7 @@
                     const content = localStorage.getItem(`wiki_${selectedTitle}`);
                     document.getElementById('title-input').value = selectedTitle;
                     document.getElementById('content-textarea').value = content || '';
-                    updateRelatedPagesList(); // 関連ページリストを更新
+                    updateRelatedPagesList();
                 }
             }
             // Tabキーでtextareaにフォーカス
@@ -600,6 +742,43 @@
         document.getElementById('title-input').addEventListener('input', function (e) {
             if (!isMouseOverList) {
                 updatePageList(e.target.value);
+            }
+        });
+
+        // 全角数字を半角数字に変換
+        document.getElementById('title-input').addEventListener('input', function (e) {
+            let value = e.target.value;
+            let newValue = value.replace(/［０-９］/g, function (s) {
+                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+            }).replace(/[０-９]/g, function (s) {
+                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+            });
+            if (value !== newValue) {
+                e.target.value = newValue;
+                const event = new Event('input', { bubbles: true });
+                e.target.dispatchEvent(event);
+            }
+        });
+
+        // input内で「・」が入力された際、行頭が数字で始まる場合に「/」に即時置換
+        document.getElementById('title-input').addEventListener('input', function (e) {
+            const input = e.target;
+            const cursorPos = input.selectionStart;
+            const text = input.value;
+            const lastChar = text[cursorPos - 1];
+
+            if (lastChar === '・') {
+                // 行頭が数字で始まる場合
+                if (/^\d/.test(text)) {
+                    const newText = text.substring(0, cursorPos - 1) + '/' + text.substring(cursorPos);
+                    input.value = newText;
+                    input.selectionStart = cursorPos;
+                    input.selectionEnd = cursorPos;
+
+                    // イベントをトリガーして変更を反映
+                    const event = new Event('input', { bubbles: true });
+                    input.dispatchEvent(event);
+                }
             }
         });
 
