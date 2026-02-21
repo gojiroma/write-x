@@ -247,6 +247,8 @@
         let relatedListNavigationTimeout = null;
         let audioContext = null;
         let lastHoveredTitle = null;
+        let shiftKeyPressCount = 0;
+        let shiftKeyPressTimeout = null;
 
         // ビープ音を再生する関数
         function playBeep(frequency = 440, duration = 0.1) {
@@ -492,6 +494,19 @@
             return textarea.selectionStart === textarea.value.length;
         }
 
+        // カーソルがある行の文字列を取得
+        function getCurrentLine(textarea) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            const beforeCursor = text.substring(0, start);
+            const lineBreakPos = beforeCursor.lastIndexOf('\n');
+            const lineStart = lineBreakPos === -1 ? 0 : lineBreakPos + 1;
+            const lineEnd = text.indexOf('\n', start);
+            const line = lineEnd === -1 ? text.substring(lineStart) : text.substring(lineStart, lineEnd);
+            return line.trim();
+        }
+
         // JSONデータをエクスポート
         function exportToJson() {
             const data = {};
@@ -595,8 +610,29 @@
             const inputElement = document.getElementById('title-input');
             const textareaElement = document.getElementById('content-textarea');
 
+            // Shiftキーを2回押した時の処理
+            if (e.key === 'Shift') {
+                if (shiftKeyPressCount === 0) {
+                    shiftKeyPressCount++;
+                    clearTimeout(shiftKeyPressTimeout);
+                    shiftKeyPressTimeout = setTimeout(() => {
+                        shiftKeyPressCount = 0;
+                    }, 500);
+                } else if (shiftKeyPressCount === 1 && document.activeElement === textareaElement) {
+                    e.preventDefault();
+                    const currentLine = getCurrentLine(textareaElement);
+                    if (currentLine) {
+                        const pageTitle = currentLine;
+                        document.getElementById('title-input').value = pageTitle;
+                        document.getElementById('content-textarea').value = '';
+                        document.getElementById('content-textarea').focus();
+                        playBeep(880, 0.1); // 確定時の高い音
+                    }
+                    shiftKeyPressCount = 0;
+                }
+            }
             // Ctrl+Sでエクスポート
-            if (e.ctrlKey && e.key === 's') {
+            else if (e.ctrlKey && e.key === 's') {
                 e.preventDefault();
                 exportToJson();
             }
@@ -941,6 +977,17 @@
                 } else {
                     textarea.focus();
                 }
+            }
+        });
+
+        // ウィンドウフォーカスが復活したときの処理
+        window.addEventListener('focus', function () {
+            const textarea = document.getElementById('content-textarea');
+            const input = document.getElementById('title-input');
+            if (textarea.value.trim() === '') {
+                input.focus();
+            } else {
+                textarea.focus();
             }
         });
 
