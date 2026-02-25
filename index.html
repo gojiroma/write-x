@@ -3,8 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐹</text></svg>" />
     <title>mogr</title>
@@ -19,11 +18,12 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
+            padding: 0;
             min-height: 100vh;
             margin: 0;
             position: relative;
             overflow-y: hidden;
+            touch-action: manipulation;
         }
 
         .side-buttons {
@@ -56,9 +56,10 @@
         }
 
         .input-container {
-            width: 80%;
+            width: 90%;
             max-width: 600px;
             margin-bottom: 10px;
+            padding-top: 20px;
         }
 
         .title-input {
@@ -74,7 +75,7 @@
         }
 
         .content-textarea-wrapper {
-            width: 80%;
+            width: 90%;
             max-width: 600px;
             margin-bottom: 20px;
             position: relative;
@@ -95,9 +96,9 @@
         }
 
         .related-pages-container {
-            position: absolute;
-            right: -310px;
-            top: 0;
+            position: fixed;
+            right: 10px;
+            bottom: 70px;
             width: 300px;
             background-color: #fff8dc;
             border: 1px solid #ddd;
@@ -170,10 +171,11 @@
         }
 
         .page-list-container {
-            width: 87%;
-            max-width: 623px;
+            width: 90%;
+            max-width: 600px;
             border: 1px solid transparent;
             padding: 5px 2px 10px 25px;
+            margin-bottom: 80px;
         }
 
         .page-list {
@@ -215,7 +217,6 @@
             display: none;
         }
 
-        /* モーダルスタイル */
         .modal {
             display: none;
             position: fixed;
@@ -312,7 +313,6 @@
             opacity: 0.7;
         }
 
-        /* スマホ向けレスポンシブデザイン（余白を最小化） */
         @media (max-width: 768px) {
             body {
                 padding: 0;
@@ -331,21 +331,20 @@
             }
 
             .input-container {
-                width: 100%;
-                max-width: none;
+                width: 95%;
                 padding: 0;
                 box-sizing: border-box;
+                padding-top: 10px;
             }
 
             .title-input {
                 font-size: 18px;
                 padding: 10px;
-                width: calc(100% - 10px);
+                width: 100%;
             }
 
             .content-textarea-wrapper {
-                width: 100%;
-                max-width: none;
+                width: 95%;
                 padding: 0;
                 box-sizing: border-box;
             }
@@ -358,10 +357,10 @@
             }
 
             .page-list-container {
-                width: 100%;
-                max-width: none;
+                width: 95%;
                 padding: 0;
                 box-sizing: border-box;
+                margin-bottom: 70px;
             }
 
             .page-list {
@@ -379,7 +378,6 @@
                 position: fixed;
                 right: 5px;
                 left: 5px;
-                top: auto;
                 bottom: 60px;
                 width: calc(100% - 10px);
                 max-height: 30vh;
@@ -423,6 +421,11 @@
                 font-size: 14px;
                 width: 100%;
             }
+        }
+
+        /* フォーカス時のスタイル調整 */
+        .title-input:focus + .content-textarea-wrapper .content-textarea {
+            display: none;
         }
     </style>
 </head>
@@ -692,16 +695,15 @@
                 container.classList.remove('show');
             }
         }
+
         // デバウンス関数
         function debounce(func, wait) {
             let timeout;
             return function () {
                 const context = this;
                 const args = arguments;
-                console.log("デバウンス関数が呼び出されました。");
                 clearTimeout(timeout);
                 timeout = setTimeout(() => {
-                    console.log("タイマーが終了しました。関数を実行します。");
                     func.apply(context, args);
                 }, wait);
             };
@@ -709,19 +711,15 @@
 
         // GitHubに自動同期する関数（デバウンス付き）
         const debouncedSyncToGithub = debounce(async function () {
-            console.log("自動同期関数が呼び出されました。現在の設定:", githubSettings);
             if (!githubSettings.username || !githubSettings.repo || !githubSettings.token) {
-                console.log("GitHub設定が不完全です。同期をスキップします。");
                 return;
             }
             try {
-                console.log("GitHubに自動同期を開始します。");
                 await syncToGithub();
             } catch (error) {
                 console.error("自動同期中にエラーが発生しました:", error);
             }
         }, 3000);
-
 
         // ページを保存
         function savePage() {
@@ -750,7 +748,6 @@
                 debouncedSyncToGithub();
             }
         }
-
 
         // ページを読み込み
         function loadPage(title, pushState = true) {
@@ -902,10 +899,10 @@
                 document.getElementById('sync-status').style.display = 'none'; // 非表示
             }
         }
+
         // GitHubに同期
         async function syncToGithub() {
             if (!githubSettings.username || !githubSettings.repo || !githubSettings.token) {
-                console.log("GitHub設定が不完全です。");
                 document.getElementById('sync-status').style.display = 'none';
                 return;
             }
@@ -961,22 +958,18 @@
 
                 if (updateResponse.ok) {
                     document.getElementById('sync-status').textContent = '同期完了: ' + new Date().toLocaleString();
-                    document.getElementById('sync-status').style.display = 'block';
                 } else {
                     const error = await updateResponse.json();
                     document.getElementById('sync-status').textContent = '同期失敗: ' + new Date().toLocaleString();
-                    document.getElementById('sync-status').style.display = 'block';
                 }
             } catch (error) {
                 document.getElementById('sync-status').textContent = '同期エラー: ' + new Date().toLocaleString();
-                document.getElementById('sync-status').style.display = 'block';
             }
         }
 
         // GitHubから同期
         async function syncFromGithub() {
             if (!githubSettings.username || !githubSettings.repo || !githubSettings.token) {
-                console.log("GitHub設定が不完全です。");
                 return false;
             }
 
@@ -1016,7 +1009,6 @@
                 return false;
             }
         }
-
 
         // モーダルを開く
         function openModal() {
@@ -1503,6 +1495,9 @@
             }
         });
 
+        // タッチデバイス向けの自動フォーカス抑制
+        document.addEventListener('touchstart', function() {}, { passive: true });
+
         // 初期表示
         window.addEventListener('load', async function () {
             cleanEmptyEntries();
@@ -1538,7 +1533,6 @@
             updatePageList();
             updateRelatedPagesList();
         });
-
     </script>
 </body>
 
