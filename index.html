@@ -209,15 +209,107 @@
         #file-input {
             display: none;
         }
+
+        /* モーダルスタイル */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: #fff8dc;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .modal-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .modal-form input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .modal-form button {
+            padding: 10px;
+            background-color: #fff8dc;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .modal-form button:hover {
+            background-color: #e8e8c8;
+        }
+
+        .info-button {
+            position: fixed;
+            right: 10px;
+            bottom: 1%;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            background-color: #fff8dc;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            z-index: 30;
+            opacity: 0.2;
+        }
+
+        .info-button:hover {
+            opacity: 1;
+            background-color: #e8e8c8;
+        }
+
+        .sync-status {
+            position: fixed;
+            right: 70px;
+            bottom: 1%;
+            background-color: #fff8dc;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 30;
+            opacity: 0.7;
+        }
     </style>
 </head>
 
 <body>
-    <div class="side-buttons">
-        <button class="side-button" id="export-button" title="エクスポート (Ctrl+S)">出力</button>
-        <button class="side-button" id="import-button" title="インポート (Ctrl+O)">取込</button>
-    </div>
-
     <div class="input-container">
         <input type="text" id="title-input" class="title-input" placeholder="タイトルを入力..." autocomplete="off">
     </div>
@@ -232,8 +324,35 @@
     </div>
     <input type="file" id="file-input" accept=".json">
 
+    <button class="info-button" id="info-button">i</button>
+    <div class="sync-status" id="sync-status">未同期</div>
+
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>設定</h2>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-form">
+                <h3>GitHub同期設定</h3>
+                <input type="text" id="github-username" placeholder="GitHubユーザー名">
+                <input type="text" id="github-repo" placeholder="リポジトリ名">
+                <input type="text" id="github-file" placeholder="ファイル名 (例: wiki.json)">
+                <input type="password" id="github-token" placeholder="GitHubトークン">
+                <button id="save-github-settings">設定を保存</button>
+                <button id="sync-to-github">GitHubに同期</button>
+                <button id="sync-from-github">GitHubから同期</button>
+                <hr>
+                <h3>ローカル入出力</h3>
+                <button id="export-button">エクスポート (Ctrl+S)</button>
+                <button id="import-button">インポート (Ctrl+O)</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const LAST_OPENED_KEY = 'last_opened_page';
+        const GITHUB_SETTINGS_KEY = 'github_settings';
         let isIMEComposing = false;
         let isMouseOverList = false;
         let selectedIndex = -1;
@@ -249,6 +368,12 @@
         let lastHoveredTitle = null;
         let shiftKeyPressCount = 0;
         let shiftKeyPressTimeout = null;
+        let githubSettings = {
+            username: '',
+            repo: '',
+            file: 'wiki.json',
+            token: ''
+        };
 
         // ビープ音を再生する関数
         function playBeep(frequency = 440, duration = 0.1) {
@@ -449,6 +574,36 @@
                 container.classList.remove('show');
             }
         }
+        // デバウンス関数
+        function debounce(func, wait) {
+            let timeout;
+            return function () {
+                const context = this;
+                const args = arguments;
+                console.log("デバウンス関数が呼び出されました。");
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    console.log("タイマーが終了しました。関数を実行します。");
+                    func.apply(context, args);
+                }, wait);
+            };
+        }
+
+        // GitHubに自動同期する関数（デバウンス付き）
+        const debouncedSyncToGithub = debounce(async function () {
+            console.log("自動同期関数が呼び出されました。現在の設定:", githubSettings);
+            if (!githubSettings.username || !githubSettings.repo || !githubSettings.token) {
+                console.log("GitHub設定が不完全です。同期をスキップします。");
+                return;
+            }
+            try {
+                console.log("GitHubに自動同期を開始します。");
+                await syncToGithub();
+            } catch (error) {
+                console.error("自動同期中にエラーが発生しました:", error);
+            }
+        }, 3000);
+
 
         // ページを保存
         function savePage() {
@@ -461,8 +616,23 @@
                 localStorage.setItem(LAST_OPENED_KEY, title);
                 updatePageList(currentFilter);
                 updateRelatedPagesList();
+
+                // GitHub設定を再読み込み
+                const savedSettings = localStorage.getItem(GITHUB_SETTINGS_KEY);
+                if (savedSettings) {
+                    githubSettings = JSON.parse(savedSettings);
+                }
+
+                // 同期ステータスを「同期待ち」に更新
+                if (githubSettings.username && githubSettings.repo && githubSettings.token) {
+                    document.getElementById('sync-status').textContent = '同期待ち';
+                    document.getElementById('sync-status').style.display = 'block';
+                }
+
+                debouncedSyncToGithub();
             }
         }
+
 
         // ページを読み込み
         function loadPage(title, pushState = true) {
@@ -581,6 +751,164 @@
             };
             reader.readAsText(file);
             event.target.value = ''; // ファイル選択をリセット
+        }
+
+        // GitHub設定を保存
+        function saveGithubSettings() {
+            githubSettings = {
+                username: document.getElementById('github-username').value.trim(),
+                repo: document.getElementById('github-repo').value.trim(),
+                file: document.getElementById('github-file').value.trim() || 'wiki.json',
+                token: document.getElementById('github-token').value.trim()
+            };
+            localStorage.setItem(GITHUB_SETTINGS_KEY, JSON.stringify(githubSettings));
+            alert('GitHub設定を保存しました。');
+        }
+
+        // GitHub設定を読み込み
+        function loadGithubSettings() {
+            const savedSettings = localStorage.getItem(GITHUB_SETTINGS_KEY);
+            if (savedSettings) {
+                githubSettings = JSON.parse(savedSettings);
+                document.getElementById('github-username').value = githubSettings.username;
+                document.getElementById('github-repo').value = githubSettings.repo;
+                document.getElementById('github-file').value = githubSettings.file;
+                document.getElementById('github-token').value = githubSettings.token;
+                // GitHub設定がある場合のみ同期ステータスを表示
+                if (githubSettings.username && githubSettings.repo && githubSettings.token) {
+                    document.getElementById('sync-status').style.display = 'block';
+                } else {
+                    document.getElementById('sync-status').style.display = 'none';
+                }
+            } else {
+                document.getElementById('sync-status').style.display = 'none'; // 非表示
+            }
+        }
+        // GitHubに同期
+        async function syncToGithub() {
+            if (!githubSettings.username || !githubSettings.repo || !githubSettings.token) {
+                console.log("GitHub設定が不完全です。");
+                document.getElementById('sync-status').style.display = 'none';
+                return;
+            }
+
+            // 同期中ステータスを表示
+            document.getElementById('sync-status').textContent = '同期中...';
+            document.getElementById('sync-status').style.display = 'block';
+
+            const data = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('wiki_') && !key.startsWith('wiki_meta_')) {
+                    const title = key.replace('wiki_', '');
+                    data[title] = {
+                        content: localStorage.getItem(key),
+                        meta: JSON.parse(localStorage.getItem(`wiki_meta_${title}`) || '{}')
+                    };
+                }
+            }
+
+            const content = JSON.stringify(data, null, 2);
+            const encodedContent = btoa(unescape(encodeURIComponent(content)));
+
+            const url = `https://api.github.com/repos/${githubSettings.username}/${githubSettings.repo}/contents/${githubSettings.file}`;
+
+            try {
+                let fileSha = '';
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${githubSettings.token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+
+                if (response.ok) {
+                    const fileData = await response.json();
+                    fileSha = fileData.sha;
+                }
+
+                const updateResponse = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${githubSettings.token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: 'Update wiki data',
+                        content: encodedContent,
+                        sha: fileSha
+                    })
+                });
+
+                if (updateResponse.ok) {
+                    document.getElementById('sync-status').textContent = '同期完了: ' + new Date().toLocaleString();
+                    document.getElementById('sync-status').style.display = 'block';
+                } else {
+                    const error = await updateResponse.json();
+                    document.getElementById('sync-status').textContent = '同期失敗: ' + new Date().toLocaleString();
+                    document.getElementById('sync-status').style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('sync-status').textContent = '同期エラー: ' + new Date().toLocaleString();
+                document.getElementById('sync-status').style.display = 'block';
+            }
+        }
+
+        // GitHubから同期
+        async function syncFromGithub() {
+            if (!githubSettings.username || !githubSettings.repo || !githubSettings.token) {
+                console.log("GitHub設定が不完全です。");
+                return false;
+            }
+
+            // 同期中ステータスを表示
+            document.getElementById('sync-status').textContent = '同期中...';
+            document.getElementById('sync-status').style.display = 'block';
+
+            const url = `https://api.github.com/repos/${githubSettings.username}/${githubSettings.repo}/contents/${githubSettings.file}`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `token ${githubSettings.token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+
+                if (response.ok) {
+                    const fileData = await response.json();
+                    const content = decodeURIComponent(escape(atob(fileData.content)));
+                    const data = JSON.parse(content);
+
+                    for (const title in data) {
+                        localStorage.setItem(`wiki_${title}`, data[title].content);
+                        localStorage.setItem(`wiki_meta_${title}`, JSON.stringify(data[title].meta || { updatedAt: Date.now() }));
+                    }
+
+                    document.getElementById('sync-status').textContent = '同期完了: ' + new Date().toLocaleString();
+                    return true;
+                } else {
+                    const error = await response.json();
+                    document.getElementById('sync-status').textContent = '同期失敗: ' + new Date().toLocaleString();
+                    return false;
+                }
+            } catch (error) {
+                document.getElementById('sync-status').textContent = '同期エラー: ' + new Date().toLocaleString();
+                return false;
+            }
+        }
+
+
+        // モーダルを開く
+        function openModal() {
+            document.getElementById('settings-modal').style.display = 'block';
+            loadGithubSettings();
+        }
+
+        // モーダルを閉じる
+        function closeModal() {
+            document.getElementById('settings-modal').style.display = 'none';
         }
 
         // inputの入力時にコンテンツの存在をチェック
@@ -1002,6 +1330,27 @@
             document.getElementById('file-input').click();
         });
 
+        // 情報ボタンのイベントリスナー
+        document.getElementById('info-button').addEventListener('click', openModal);
+
+        // モーダル閉じるボタンのイベントリスナー
+        document.getElementById('modal-close').addEventListener('click', closeModal);
+
+        // GitHub設定保存ボタンのイベントリスナー
+        document.getElementById('save-github-settings').addEventListener('click', saveGithubSettings);
+
+        // GitHub同期ボタンのイベントリスナー
+        document.getElementById('sync-to-github').addEventListener('click', syncToGithub);
+        document.getElementById('sync-from-github').addEventListener('click', syncFromGithub);
+
+        // モーダル外をクリックした時の処理
+        window.addEventListener('click', function (e) {
+            const modal = document.getElementById('settings-modal');
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
         // ページの空白部分をクリックした際のフォーカス制御
         document.addEventListener('click', function (e) {
             if (e.target === document.body || e.target === document.documentElement) {
@@ -1037,9 +1386,26 @@
         });
 
         // 初期表示
-        window.addEventListener('load', function () {
+        window.addEventListener('load', async function () {
             cleanEmptyEntries();
             const hash = decodeURIComponent(location.hash.substring(1));
+
+            // GitHub設定を読み込み
+            loadGithubSettings();
+
+            // GitHubから自動同期
+            if (githubSettings.username && githubSettings.repo && githubSettings.token) {
+                document.getElementById('sync-status').textContent = '同期中...';
+                document.getElementById('sync-status').style.display = 'block';
+                const syncSuccess = await syncFromGithub();
+                if (!syncSuccess) {
+                    document.getElementById('sync-status').textContent = '同期待ち';
+                }
+            } else {
+                document.getElementById('sync-status').style.display = 'none';
+            }
+
+            // ページをロード
             if (hash) {
                 loadPage(hash, false);
             } else {
@@ -1050,9 +1416,11 @@
                     newPage();
                 }
             }
+
             updatePageList();
             updateRelatedPagesList();
         });
+
     </script>
 </body>
 
