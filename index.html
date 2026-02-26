@@ -563,11 +563,21 @@
             }
 
             // 絞り込み時はアルファベット順、それ以外は更新日時順
-            if (filter) {
-                pages.sort((a, b) => a.title.localeCompare(b.title));
-            } else {
-                pages.sort((a, b) => b.updatedAt - a.updatedAt);
-            }
+            pages.sort((a, b) => {
+                const extractDateParts = (title) => {
+                    const match = title.match(/(\d+)\/(\d+)/);
+                    if (!match) return [Infinity, Infinity]; // 日付なしは最後に
+                    const month = parseInt(match[1], 10);
+                    const day = parseInt(match[2], 10);
+                    return [month, day];
+                };
+                const [monthA, dayA] = extractDateParts(a.title);
+                const [monthB, dayB] = extractDateParts(b.title);
+                if (monthA !== monthB) {
+                    return monthA - monthB; // 月でソート
+                }
+                return dayA - dayB; // 日でソート
+            });
 
             pages.forEach((page, index) => {
                 if (filter && !page.title.includes(filter)) return;
@@ -1383,49 +1393,49 @@
             }
         });
 
-        // inputの絞り込み機能
-        document.getElementById('title-input').addEventListener('input', function (e) {
-            if (!isMouseOverList) {
-                updatePageList(e.target.value);
-            }
-        });
+    // inputの絞り込み機能
+    document.getElementById('title-input').addEventListener('input', function (e) {
+        if (!isMouseOverList) {
+            updatePageList(e.target.value);
+        }
+    });
 
-        // 全角数字を半角数字に変換
-        document.getElementById('title-input').addEventListener('input', function (e) {
-            let value = e.target.value;
-            let newValue = value.replace(/［０-９］/g, function (s) {
-                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
-            }).replace(/[０-９]/g, function (s) {
-                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
-            });
-            if (value !== newValue) {
-                e.target.value = newValue;
+    // 全角数字を半角数字に変換
+    document.getElementById('title-input').addEventListener('input', function (e) {
+        let value = e.target.value;
+        let newValue = value.replace(/［０-９］/g, function (s) {
+            return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+        }).replace(/[０-９]/g, function (s) {
+            return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+        });
+        if (value !== newValue) {
+            e.target.value = newValue;
+            const event = new Event('input', { bubbles: true });
+            e.target.dispatchEvent(event);
+        }
+    });
+
+    // input内で「・」が入力された際、行頭が数字で始まる場合に「/」に即時置換
+    document.getElementById('title-input').addEventListener('input', function (e) {
+        const input = e.target;
+        const cursorPos = input.selectionStart;
+        const text = input.value;
+        const lastChar = text[cursorPos - 1];
+
+        if (lastChar === '・') {
+            // 行頭が数字で始まる場合
+            if (/^\d/.test(text)) {
+                const newText = text.substring(0, cursorPos - 1) + '/' + text.substring(cursorPos);
+                input.value = newText;
+                input.selectionStart = cursorPos;
+                input.selectionEnd = cursorPos;
+
+                // イベントをトリガーして変更を反映
                 const event = new Event('input', { bubbles: true });
-                e.target.dispatchEvent(event);
+                input.dispatchEvent(event);
             }
-        });
-
-        // input内で「・」が入力された際、行頭が数字で始まる場合に「/」に即時置換
-        document.getElementById('title-input').addEventListener('input', function (e) {
-            const input = e.target;
-            const cursorPos = input.selectionStart;
-            const text = input.value;
-            const lastChar = text[cursorPos - 1];
-
-            if (lastChar === '・') {
-                // 行頭が数字で始まる場合
-                if (/^\d/.test(text)) {
-                    const newText = text.substring(0, cursorPos - 1) + '/' + text.substring(cursorPos);
-                    input.value = newText;
-                    input.selectionStart = cursorPos;
-                    input.selectionEnd = cursorPos;
-
-                    // イベントをトリガーして変更を反映
-                    const event = new Event('input', { bubbles: true });
-                    input.dispatchEvent(event);
-                }
-            }
-        });
+        }
+    });
 
         // ページリストにマウスが乗った/離れた時の処理
         document.getElementById('page-list').addEventListener('mouseenter', () => {
