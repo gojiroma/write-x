@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐹</text></svg>" />
     <title>mogr</title>
@@ -389,6 +390,15 @@
                 font-size: 14px;
             }
 
+            .related-pages-list img {
+                max-width: 100%;
+                max-height: 100px;
+                margin: 5px 0;
+                border-radius: 4px;
+                object-fit: contain;
+            }
+
+
             .info-button {
                 right: 5px;
                 bottom: 5px;
@@ -424,7 +434,7 @@
         }
 
         /* フォーカス時のスタイル調整 */
-        .title-input:focus + .content-textarea-wrapper .content-textarea {
+        .title-input:focus+.content-textarea-wrapper .content-textarea {
             display: none;
         }
     </style>
@@ -528,10 +538,13 @@
         // 関連ページリストのハイライトを解除する関数
         function clearRelatedPagesHighlight() {
             relatedPageButtons.forEach(button => {
-                button.classList.remove('selected');
+                if (button.classList) {
+                    button.classList.remove('selected');
+                }
             });
             relatedSelectedIndex = -1;
         }
+
 
         // 空のエントリを削除
         function cleanEmptyEntries() {
@@ -680,24 +693,39 @@
 
             // 現在のtextareaの内容からURLを抽出・表示
             const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const imageUrlRegex = /\.(jpeg|jpg|gif|png|webp|svg)$/i;
             const urls = text.match(urlRegex);
             if (urls) {
                 urls.forEach(url => {
-                    const urlButton = document.createElement('a');
-                    urlButton.href = url;
-                    urlButton.textContent = url;
-                    urlButton.target = '_blank';
-                    urlButton.rel = 'noopener noreferrer';
-                    urlButton.classList.add('related-url-button');
-                    urlButton.onclick = (e) => {
-                        e.preventDefault();
-                        window.open(urlButton.href, '_blank');
-                        document.getElementById('content-textarea').focus();
-                    };
-                    list.appendChild(urlButton);
-                    relatedPageButtons.push(urlButton);
+                    if (imageUrlRegex.test(url)) {
+                        const img = document.createElement('img');
+                        img.src = url;
+                        img.alt = '関連画像';
+                        img.loading = 'lazy';
+                        img.onclick = () => {
+                            window.open(url, '_blank');
+                            document.getElementById('content-textarea').focus();
+                        };
+                        list.appendChild(img);
+                        relatedPageButtons.push(img);
+                    } else {
+                        const urlButton = document.createElement('a');
+                        urlButton.href = url;
+                        urlButton.textContent = url;
+                        urlButton.target = '_blank';
+                        urlButton.rel = 'noopener noreferrer';
+                        urlButton.classList.add('related-url-button');
+                        urlButton.onclick = (e) => {
+                            e.preventDefault();
+                            window.open(urlButton.href, '_blank');
+                            document.getElementById('content-textarea').focus();
+                        };
+                        list.appendChild(urlButton);
+                        relatedPageButtons.push(urlButton);
+                    }
                 });
             }
+
 
             if (foundTitles.length > 0 || urls) {
                 container.classList.add('show');
@@ -1251,6 +1279,10 @@
                         window.open(selectedElement.href, '_blank');
                         document.getElementById('content-textarea').focus();
                         playBeep(880, 0.1);
+                    } else if (selectedElement.tagName === 'IMG') {
+                        window.open(selectedElement.src, '_blank');
+                        document.getElementById('content-textarea').focus();
+                        playBeep(880, 0.1);
                     } else {
                         const selectedTitle = selectedElement.textContent;
                         const content = localStorage.getItem(`wiki_${selectedTitle}`);
@@ -1263,6 +1295,7 @@
                     relatedListNavigationMode = false;
                 }
             }
+
             // inputで右キーを押した時の処理（関連ページリストにフォーカス）
             else if (document.activeElement === inputElement && e.key === 'ArrowRight' && inputElement.selectionStart === inputElement.value.length) {
                 e.preventDefault();
@@ -1385,49 +1418,49 @@
             }
         });
 
-    // inputの絞り込み機能
-    document.getElementById('title-input').addEventListener('input', function (e) {
-        if (!isMouseOverList) {
-            updatePageList(e.target.value);
-        }
-    });
-
-    // 全角数字を半角数字に変換
-    document.getElementById('title-input').addEventListener('input', function (e) {
-        let value = e.target.value;
-        let newValue = value.replace(/［０-９］/g, function (s) {
-            return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
-        }).replace(/[０-９]/g, function (s) {
-            return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
-        });
-        if (value !== newValue) {
-            e.target.value = newValue;
-            const event = new Event('input', { bubbles: true });
-            e.target.dispatchEvent(event);
-        }
-    });
-
-    // input内で「・」が入力された際、行頭が数字で始まる場合に「/」に即時置換
-    document.getElementById('title-input').addEventListener('input', function (e) {
-        const input = e.target;
-        const cursorPos = input.selectionStart;
-        const text = input.value;
-        const lastChar = text[cursorPos - 1];
-
-        if (lastChar === '・') {
-            // 行頭が数字で始まる場合
-            if (/^\d/.test(text)) {
-                const newText = text.substring(0, cursorPos - 1) + '/' + text.substring(cursorPos);
-                input.value = newText;
-                input.selectionStart = cursorPos;
-                input.selectionEnd = cursorPos;
-
-                // イベントをトリガーして変更を反映
-                const event = new Event('input', { bubbles: true });
-                input.dispatchEvent(event);
+        // inputの絞り込み機能
+        document.getElementById('title-input').addEventListener('input', function (e) {
+            if (!isMouseOverList) {
+                updatePageList(e.target.value);
             }
-        }
-    });
+        });
+
+        // 全角数字を半角数字に変換
+        document.getElementById('title-input').addEventListener('input', function (e) {
+            let value = e.target.value;
+            let newValue = value.replace(/［０-９］/g, function (s) {
+                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+            }).replace(/[０-９]/g, function (s) {
+                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+            });
+            if (value !== newValue) {
+                e.target.value = newValue;
+                const event = new Event('input', { bubbles: true });
+                e.target.dispatchEvent(event);
+            }
+        });
+
+        // input内で「・」が入力された際、行頭が数字で始まる場合に「/」に即時置換
+        document.getElementById('title-input').addEventListener('input', function (e) {
+            const input = e.target;
+            const cursorPos = input.selectionStart;
+            const text = input.value;
+            const lastChar = text[cursorPos - 1];
+
+            if (lastChar === '・') {
+                // 行頭が数字で始まる場合
+                if (/^\d/.test(text)) {
+                    const newText = text.substring(0, cursorPos - 1) + '/' + text.substring(cursorPos);
+                    input.value = newText;
+                    input.selectionStart = cursorPos;
+                    input.selectionEnd = cursorPos;
+
+                    // イベントをトリガーして変更を反映
+                    const event = new Event('input', { bubbles: true });
+                    input.dispatchEvent(event);
+                }
+            }
+        });
 
         // ページリストにマウスが乗った/離れた時の処理
         document.getElementById('page-list').addEventListener('mouseenter', () => {
@@ -1506,7 +1539,7 @@
         });
 
         // タッチデバイス向けの自動フォーカス抑制
-        document.addEventListener('touchstart', function() {}, { passive: true });
+        document.addEventListener('touchstart', function () { }, { passive: true });
 
         // 初期表示
         window.addEventListener('load', async function () {
