@@ -1094,7 +1094,7 @@
                 } else if (document.activeElement === inputElement && e.key === 'Tab') {
                     e.preventDefault();
                     document.getElementById('content-textarea').focus();
-                } else if (document.activeElement === textareaElement && (e.key === 'Tab' || e.key === 'Enter')) {
+                } else if (document.activeElement === textareaElement && (e.key === 'Tab')) {
                     e.preventDefault();
                     document.getElementById('title-input').value = '';
                     document.getElementById('content-textarea').value = '';
