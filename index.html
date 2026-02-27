@@ -390,7 +390,7 @@
                 font-size: 14px;
             }
 
-            .related-pages-list > img {
+            .related-pages-list>img {
                 max-width: 100%;
                 max-height: 120px;
                 margin: 5px 0;
@@ -621,7 +621,7 @@
                         localStorage.removeItem(`wiki_meta_${page.title}`);
                         if (document.getElementById('title-input').value === page.title) {
                             document.getElementById('title-input').value = '';
-                            document.getElementById('content-textarea').value = '';
+                            document.gShiftetElementById('content-textarea').value = '';
                             history.replaceState({ title: '' }, '', '#');
                         }
                         updatePageList(filter);
@@ -1126,7 +1126,11 @@
                 } else if (shiftKeyPressCount === 1 && document.activeElement === textareaElement) {
                     e.preventDefault();
                     const currentLine = getCurrentLine(textareaElement);
-                    if (currentLine) {
+                    if (currentLine.startsWith('http')) {
+                        window.open(currentLine, '_blank');
+                        textareaElement.focus();
+                    }
+                    else if (currentLine) {
                         const pageTitle = currentLine;
                         const content = localStorage.getItem(`wiki_${pageTitle}`);
                         document.getElementById('title-input').value = pageTitle;
@@ -1135,6 +1139,17 @@
                         playBeep(880, 0.1);
                         updateHash(pageTitle, true);
                     }
+                    shiftKeyPressCount = 0;
+                } else if (shiftKeyPressCount === 1 && document.activeElement === inputElement && inputElement.value.trim() === '') {
+                    e.preventDefault();
+                    const today = new Date();
+                    const month = today.getMonth() + 1;
+                    const day = today.getDate();
+                    inputElement.value = `${month}/${day}`;
+                    const content = localStorage.getItem(`wiki_${inputElement.value}`);
+                    document.getElementById('content-textarea').value = content || '';
+                    document.getElementById('content-textarea').focus();
+                    updatePageList(inputElement.value);
                     shiftKeyPressCount = 0;
                 }
             }
@@ -1367,7 +1382,7 @@
             // IME入力中でない場合のみEnterキーでtextareaにフォーカス（textareaを空欄にする）
             else if (document.activeElement === inputElement && e.key === 'Enter' && !isIMEComposing) {
                 e.preventDefault();
-                document.getElementById('content-textarea').value = '';
+                document.getElementById('content-textarea').value = content || '';
                 document.getElementById('content-textarea').focus();
                 updatePageList(currentFilter);
                 updateRelatedPagesList();
