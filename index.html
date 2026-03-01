@@ -560,180 +560,188 @@
                 }
             }
         }
+        // ページ一覧表示関数を修正（正規化したテキストで比較）
 
-        // ページ一覧を表示（絞り込み対応、絞り込み時はアルファベット順、それ以外は更新日時順）
-        function updatePageList(filter = '') {
-            currentFilter = filter;
-            const pageList = document.getElementById('page-list');
-            pageList.innerHTML = '';
-            const pages = [];
-            pageButtons = [];
+        // ページ一覧を表示（絞り込み時はアルファベット順、それ以外は更新日時順）
+            function updatePageList(filter = '') {
+                currentFilter = filter;
+                const pageList = document.getElementById('page-list');
+                pageList.innerHTML = '';
+                const pages = [];
+                pageButtons = [];
 
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith('wiki_') && !key.startsWith('wiki_meta_')) {
-                    const title = key.replace('wiki_', '');
-                    const metaKey = `wiki_meta_${title}`;
-                    const meta = JSON.parse(localStorage.getItem(metaKey) || '{"updatedAt": 0}');
-                    pages.push({ title, updatedAt: meta.updatedAt });
-                }
-            }
-
-            // 絞り込み時はアルファベット順、それ以外は更新日時順
-            pages.sort((a, b) => {
-                const extractDateParts = (title) => {
-                    const match = title.match(/(\d+)\/(\d+)/);
-                    if (!match) return [Infinity, Infinity]; // 日付なしは最後に
-                    const month = parseInt(match[1], 10);
-                    const day = parseInt(match[2], 10);
-                    return [month, day];
-                };
-                const [monthA, dayA] = extractDateParts(a.title);
-                const [monthB, dayB] = extractDateParts(b.title);
-                if (monthA !== monthB) {
-                    return monthA - monthB; // 月でソート
-                }
-                return dayA - dayB; // 日でソート
-            });
-
-            pages.forEach((page, index) => {
-                if (filter && !page.title.includes(filter)) return;
-
-                const button = document.createElement('button');
-                if (filter) {
-                    const regex = new RegExp(filter, 'gi');
-                    button.innerHTML = page.title.replace(regex, match => `<span class="highlight">${match}</span>`);
-                } else {
-                    button.textContent = page.title;
-                }
-                button.onclick = () => loadPage(page.title);
-                button.onmouseenter = () => {
-                    if (lastHoveredTitle !== page.title) {
-                        playBeep();
-                        lastHoveredTitle = page.title;
-                        updateHashAndLoadPage(page.title);
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith('wiki_') && !key.startsWith('wiki_meta_')) {
+                        const title = key.replace('wiki_', '');
+                        const metaKey = `wiki_meta_${title}`;
+                        const meta = JSON.parse(localStorage.getItem(metaKey) || '{"updatedAt": 0}');
+                        pages.push({ title, updatedAt: meta.updatedAt });
                     }
-                };
-                button.ondblclick = (e) => {
-                    e.stopPropagation();
-                    if (confirm(`${page.title}を削除しますか？`)) {
-                        localStorage.removeItem(`wiki_${page.title}`);
-                        localStorage.removeItem(`wiki_meta_${page.title}`);
-                        if (document.getElementById('title-input').value === page.title) {
-                            document.getElementById('title-input').value = '';
-                            document.gShiftetElementById('content-textarea').value = '';
-                            history.replaceState({ title: '' }, '', '#');
-                        }
-                        updatePageList(filter);
-                    }
-                };
-                pageList.appendChild(button);
-                pageButtons.push(button);
-            });
-
-            // 選択状態を更新
-            if (selectedIndex >= 0 && selectedIndex < pageButtons.length) {
-                pageButtons[selectedIndex].classList.add('selected');
-            } else {
-                selectedIndex = -1;
-            }
-        }
-
-        // 関連ページリストを更新（双方向対応）
-        function updateRelatedPagesList() {
-            const textarea = document.getElementById('content-textarea');
-            const container = document.getElementById('related-pages-container');
-            const list = document.getElementById('related-pages-list');
-            const text = textarea.value;
-            const currentTitle = document.getElementById('title-input').value.trim();
-
-            // 既存のリストをクリア
-            list.innerHTML = '';
-            relatedPageButtons = [];
-
-            // ページタイトルとコンテンツを取得
-            const pages = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith('wiki_') && !key.startsWith('wiki_meta_')) {
-                    const title = key.replace('wiki_', '');
-                    const content = localStorage.getItem(key);
-                    pages.push({ title, content });
                 }
-            }
 
-            // 双方向の関連性をチェック
-            const foundTitles = [];
-            pages.forEach(page => {
-                if (page.title === currentTitle) return;
-
-                // 本文にタイトルが含まれるか
-                const titleInContent = text.includes(page.title);
-                // タイトルに本文が含まれるか
-                const contentInTitle = page.content.includes(currentTitle);
-
-                if (titleInContent || contentInTitle) {
-                    foundTitles.push(page);
-                }
-            });
-
-            // 関連ページがあればリストを表示
-            if (foundTitles.length > 0) {
-                foundTitles.forEach(page => {
-                    const pageButton = document.createElement('button');
-                    pageButton.textContent = page.title;
-                    pageButton.onclick = () => {
-                        clearPageListHighlight();
-                        loadPage(page.title);
-                        clearRelatedPagesHighlight();
-                    };
-                    list.appendChild(pageButton);
-                    relatedPageButtons.push(pageButton);
-                });
-            }
-
-            // 現在のtextareaの内容からURLを抽出・表示
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            const imageUrlRegex = /\.(jpeg|jpg|gif|png|webp|svg)$/i;
-            const urls = text.match(urlRegex);
-            if (urls) {
-                urls.forEach(url => {
-                    if (imageUrlRegex.test(url)) {
-                        const img = document.createElement('img');
-                        img.src = url;
-                        img.alt = '関連画像';
-                        img.loading = 'lazy';
-                        img.onclick = () => {
-                            window.open(url, '_blank');
-                            document.getElementById('content-textarea').focus();
-                        };
-                        list.appendChild(img);
-                        relatedPageButtons.push(img);
+                // 絞り込み時はアルファベット順、それ以外は更新日時順（降順）
+                pages.sort((a, b) => {
+                    if (filter) {
+                        // 絞り込み時はアルファベット順
+                        const normalizedA = normalizeText(a.title);
+                        const normalizedB = normalizeText(b.title);
+                        return normalizedA.localeCompare(normalizedB, 'ja');
                     } else {
-                        const urlButton = document.createElement('a');
-                        urlButton.href = url;
-                        urlButton.textContent = url;
-                        urlButton.target = '_blank';
-                        urlButton.rel = 'noopener noreferrer';
-                        urlButton.classList.add('related-url-button');
-                        urlButton.onclick = (e) => {
-                            e.preventDefault();
-                            window.open(urlButton.href, '_blank');
-                            document.getElementById('content-textarea').focus();
-                        };
-                        list.appendChild(urlButton);
-                        relatedPageButtons.push(urlButton);
+                        // 絞り込みなし時は更新日時順（新しい順）
+                        return b.updatedAt - a.updatedAt;
                     }
                 });
+
+                // 以下、既存の処理を続ける
+                pages.forEach((page) => {
+                    const normalizedTitle = normalizeText(page.title);
+                    const normalizedFilter = normalizeText(filter);
+                    if (filter && !normalizedTitle.includes(normalizedFilter)) return;
+
+                    const button = document.createElement('button');
+                    if (filter) {
+                        const regex = new RegExp(escapeRegExp(filter), 'gi');
+                        button.innerHTML = page.title.replace(regex, match => `<span class="highlight">${match}</span>`);
+                    } else {
+                        button.textContent = page.title;
+                    }
+                    button.onclick = () => loadPage(page.title);
+                    button.onmouseenter = () => {
+                        if (lastHoveredTitle !== page.title) {
+                            playBeep();
+                            lastHoveredTitle = page.title;
+                            updateHashAndLoadPage(page.title);
+                        }
+                    };
+                    button.ondblclick = (e) => {
+                        e.stopPropagation();
+                        if (confirm(`${page.title}を削除しますか？`)) {
+                            localStorage.removeItem(`wiki_${page.title}`);
+                            localStorage.removeItem(`wiki_meta_${page.title}`);
+                            if (document.getElementById('title-input').value === page.title) {
+                                document.getElementById('title-input').value = '';
+                                document.getElementById('content-textarea').value = '';
+                                history.replaceState({ title: '' }, '', '#');
+                            }
+                            updatePageList(filter);
+                        }
+                    };
+                    pageList.appendChild(button);
+                    pageButtons.push(button);
+                });
+
+                // 選択状態を更新
+                if (selectedIndex >= 0 && selectedIndex < pageButtons.length) {
+                    pageButtons[selectedIndex].classList.add('selected');
+                } else {
+                    selectedIndex = -1;
+                }
             }
 
-
-            if (foundTitles.length > 0 || urls) {
-                container.classList.add('show');
-            } else {
-                container.classList.remove('show');
-            }
+        // レグエスケープ用関数
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
+        // 関連ページリストを更新（双方向対応）
+        // 関連ページリストを更新（双方向対応、タイトル空除外）
+            function updateRelatedPagesList() {
+                const textarea = document.getElementById('content-textarea');
+                const container = document.getElementById('related-pages-container');
+                const list = document.getElementById('related-pages-list');
+                const text = textarea.value;
+                const currentTitle = document.getElementById('title-input').value.trim();
+                let relatedPageButtons = [];
+
+                // 既存のリストをクリア
+                list.innerHTML = '';
+                relatedPageButtons = [];
+
+                // ページタイトルとコンテンツを取得
+                const pages = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith('wiki_') && !key.startsWith('wiki_meta_')) {
+                        const title = key.replace('wiki_', '');
+                        // タイトルが空の場合は除外
+                        if (title.trim() === '') continue;
+                        const content = localStorage.getItem(key);
+                        pages.push({ title, content });
+                    }
+                }
+
+                // 双方向の関連性をチェック
+                const foundTitles = [];
+                pages.forEach(page => {
+                    if (page.title === currentTitle) return;
+
+                    // 本文にタイトルが含まれるか
+                    const titleInContent = text.includes(page.title);
+                    // タイトルに本文が含まれるか
+                    const contentInTitle = page.content.includes(currentTitle);
+
+                    if (titleInContent || contentInTitle) {
+                        foundTitles.push(page);
+                    }
+                });
+
+                // 関連ページがあればリストを表示
+                if (foundTitles.length > 0) {
+                    foundTitles.forEach(page => {
+                        const pageButton = document.createElement('button');
+                        pageButton.textContent = page.title;
+                        pageButton.onclick = () => {
+                            loadPage(page.title);
+                        };
+                        list.appendChild(pageButton);
+                        relatedPageButtons.push(pageButton);
+                    });
+                }
+
+                // 現在のtextareaの内容からURLを抽出・表示
+                const urlPattern = /(https?:\/\/[^\s]+)/g;
+                const imageUrlPattern = /\.(jpeg|jpg|gif|png|webp|svg)(\?[^\s]*)?$/i;
+                const urls = [...new Set(text.match(urlPattern) || [])];
+
+                if (urls.length > 0) {
+                    urls.forEach(url => {
+                        if (imageUrlPattern.test(url)) {
+                            const img = document.createElement('img');
+                            img.src = url;
+                            img.alt = '関連画像';
+                            img.loading = 'lazy';
+                            img.style.maxWidth = '100%';
+                            img.style.cursor = 'pointer';
+                            img.onclick = () => {
+                                window.open(url, '_blank');
+                                document.getElementById('content-textarea').focus();
+                            };
+                            list.appendChild(img);
+                            relatedPageButtons.push(img);
+                        } else {
+                            const urlButton = document.createElement('a');
+                            urlButton.href = url;
+                            urlButton.textContent = url;
+                            urlButton.target = '_blank';
+                            urlButton.rel = 'noopener noreferrer';
+                            urlButton.classList.add('related-url-button');
+                            urlButton.onclick = (e) => {
+                                e.preventDefault();
+                                window.open(urlButton.href, '_blank');
+                                document.getElementById('content-textarea').focus();
+                            };
+                            list.appendChild(urlButton);
+                            relatedPageButtons.push(urlButton);
+                        }
+                    });
+                }
+
+                if (foundTitles.length > 0 || urls.length > 0) {
+                    container.classList.add('show');
+                } else {
+                    container.classList.remove('show');
+                }
+            }
 
         // デバウンス関数
         function debounce(func, wait) {
@@ -1123,33 +1131,51 @@
                     shiftKeyPressTimeout = setTimeout(() => {
                         shiftKeyPressCount = 0;
                     }, 500);
-                } else if (shiftKeyPressCount === 1 && document.activeElement === textareaElement) {
+                } else if (shiftKeyPressCount === 1) {
                     e.preventDefault();
-                    const currentLine = getCurrentLine(textareaElement);
-                    if (currentLine.startsWith('http')) {
-                        window.open(currentLine, '_blank');
-                        textareaElement.focus();
-                    }
-                    else if (currentLine) {
-                        const pageTitle = currentLine;
-                        const content = localStorage.getItem(`wiki_${pageTitle}`);
-                        document.getElementById('title-input').value = pageTitle;
+                    // title-inputが空欄でフォーカスがある場合、m/d形式の日付を挿入
+                    if (document.activeElement === inputElement && inputElement.value.trim() === '') {
+                        const today = new Date();
+                        const month = today.getMonth() + 1;
+                        const day = today.getDate();
+                        const dateStr = `${month}/${day}`;
+                        inputElement.value = dateStr;
+                        const content = localStorage.getItem(`wiki_${dateStr}`);
                         document.getElementById('content-textarea').value = content || '';
                         document.getElementById('content-textarea').focus();
-                        playBeep(880, 0.1);
-                        updateHash(pageTitle, true);
+                        
                     }
-                    shiftKeyPressCount = 0;
-                } else if (shiftKeyPressCount === 1 && document.activeElement === inputElement && inputElement.value.trim() === '') {
-                    e.preventDefault();
-                    const today = new Date();
-                    const month = today.getMonth() + 1;
-                    const day = today.getDate();
-                    inputElement.value = `${month}/${day}`;
-                    const content = localStorage.getItem(`wiki_${inputElement.value}`);
-                    document.getElementById('content-textarea').value = content || '';
-                    document.getElementById('content-textarea').focus();
-                    updatePageList(inputElement.value);
+                    // textarea要素でShift2回押し
+                    else if (document.activeElement === textareaElement) {
+                        const currentLine = getCurrentLine(textareaElement);
+                        if (currentLine.trim() === '') {
+                            const today = new Date();
+                            const month = today.getMonth() + 1;
+                            const day = today.getDate();
+                            const dateStr = `${month}/${day}`;
+                            const startPos = textareaElement.selectionStart;
+                            const endPos = textareaElement.selectionEnd;
+                            const beforeText = textareaElement.value.substring(0, startPos);
+                            const afterText = textareaElement.value.substring(endPos);
+                            textareaElement.value = beforeText + dateStr + afterText;
+                            textareaElement.selectionStart = startPos + dateStr.length;
+                            textareaElement.selectionEnd = startPos + dateStr.length;
+                            savePage();
+                        } else if (currentLine.startsWith('http')) {
+                            window.open(currentLine, '_blank');
+                            textareaElement.focus();
+                        } else {
+                            const pageTitle = currentLine;
+                            const content = localStorage.getItem(`wiki_${pageTitle}`);
+                            if (content !== null) {
+                                document.getElementById('title-input').value = pageTitle;
+                                document.getElementById('content-textarea').value = content;
+                                document.getElementById('content-textarea').focus();
+                                playBeep(880, 0.1);
+                                updateHash(pageTitle, true);
+                            }
+                        }
+                    }
                     shiftKeyPressCount = 0;
                 }
             }
@@ -1311,7 +1337,6 @@
                     relatedListNavigationMode = false;
                 }
             }
-
             // inputで右キーを押した時の処理（関連ページリストにフォーカス）
             else if (document.activeElement === inputElement && e.key === 'ArrowRight' && inputElement.selectionStart === inputElement.value.length) {
                 e.preventDefault();
@@ -1382,7 +1407,7 @@
             // IME入力中でない場合のみEnterキーでtextareaにフォーカス（textareaを空欄にする）
             else if (document.activeElement === inputElement && e.key === 'Enter' && !isIMEComposing) {
                 e.preventDefault();
-                document.getElementById('content-textarea').value = content || '';
+                document.getElementById('content-textarea').value = '';
                 document.getElementById('content-textarea').focus();
                 updatePageList(currentFilter);
                 updateRelatedPagesList();
@@ -1434,12 +1459,36 @@
             }
         });
 
-        // inputの絞り込み機能
+        // inputの絞り込み機能（大文字小文字・全角半角・ひらがなカタカナを吸収）
         document.getElementById('title-input').addEventListener('input', function (e) {
-            if (!isMouseOverList) {
-                updatePageList(e.target.value);
-            }
+            const inputValue = e.target.value;
+            const normalizedInput = normalizeText(inputValue);
+            updatePageList(normalizedInput);
         });
+
+        // テキスト正規化関数
+        function normalizeText(text) {
+            if (!text) return text;
+            // 全角英数字を半角に変換
+            let normalized = text.replace(/［Ａ-Ｚａ-ｚ０-９］/g, function (s) {
+                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+            }).replace(/［Ａ-Ｚ］/g, function (s) {
+                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+            }).replace(/［ａ-ｚ］/g, function (s) {
+                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+            }).replace(/［０-９］/g, function (s) {
+                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+            });
+            // カタカナをひらがなに変換
+            normalized = normalized.replace(/[\u30a1-\u30f6]/g, function (match) {
+                const chr = match.charCodeAt(0) - 0x0060;
+                return String.fromCharCode(chr);
+            });
+            // 小文字に統一
+            normalized = normalized.toLowerCase();
+            return normalized;
+        }
+
 
         // 全角数字を半角数字に変換
         document.getElementById('title-input').addEventListener('input', function (e) {
