@@ -13,6 +13,7 @@
             display: none;
         }
 
+
         body {
             font-family: 'Yu Mincho', 'Hiragino Mincho Pro', serif;
             background-color: #f5f5dc;
@@ -45,7 +46,6 @@
             border: none;
             background-color: #fff8dc;
             cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -64,15 +64,12 @@
         }
 
         .title-input {
-            outline: none;
             text-align: center;
             width: 100%;
             padding: 12px;
             font-size: 24px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            border: none;
             background-color: #fff8dc;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .content-textarea-wrapper {
@@ -88,12 +85,12 @@
             height: 30vh;
             padding: 12px;
             font-size: 16px;
-            border: 1px solid #ddd;
+            border: none;
             border-radius: 4px;
             background-color: #fff8dc;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             resize: none;
             line-height: 25px;
+            outline: none;
         }
 
         .related-pages-container {
@@ -102,9 +99,7 @@
             bottom: 70px;
             width: 300px;
             background-color: #fff8dc;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border: none;
             z-index: 20;
             max-height: 300px;
             overflow-y: auto;
@@ -133,7 +128,6 @@
             background-color: transparent;
             border: none;
             cursor: pointer;
-            border-bottom: 1px solid #eee;
             text-align: left;
             text-decoration: none;
             color: #333;
@@ -174,7 +168,7 @@
         .page-list-container {
             width: 90%;
             max-width: 600px;
-            border: 1px solid transparent;
+            border: none;
             padding: 5px 2px 10px 25px;
             margin-bottom: 80px;
         }
@@ -183,9 +177,7 @@
             display: block;
             position: static;
             background-color: #fff8dc;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border: none;
             z-index: 10;
             width: 100%;
             max-height: 50vh;
@@ -210,7 +202,7 @@
         }
 
         .highlight {
-            background-color: #ffff99;
+            background-color: #99ffa8;
             font-weight: bold;
         }
 
@@ -230,14 +222,13 @@
         }
 
         .modal-content {
-            background-color: #fff8dc;
+            background-color: #e3e3e3;
             margin: 15% auto;
             padding: 20px;
             border: 1px solid #ddd;
             border-radius: 8px;
             width: 80%;
             max-width: 500px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
 
         .modal-header {
@@ -288,7 +279,6 @@
             border: none;
             background-color: #fff8dc;
             cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -551,16 +541,17 @@
         function cleanEmptyEntries() {
             for (let i = localStorage.length - 1; i >= 0; i--) {
                 const key = localStorage.key(i);
-                if (key.startsWith('wiki_')) {
+                if (key.startsWith('wiki_') && !key.startsWith('wiki_meta_')) {
                     const content = localStorage.getItem(key);
-                    if (!content) {
+                    if (!content || content.trim() === '') {
+                        const title = key.replace('wiki_', '');
                         localStorage.removeItem(key);
-                        localStorage.removeItem(`wiki_meta_${key.replace('wiki_', '')}`);
+                        localStorage.removeItem(`wiki_meta_${title}`);
                     }
                 }
             }
+            
         }
-        // ページ一覧表示関数を修正（正規化したテキストで比較）
 
         // ページ一覧を表示（絞り込み時はアルファベット順、それ以外は更新日時順）
         function updatePageList(filter = '') {
@@ -574,26 +565,30 @@
                 const key = localStorage.key(i);
                 if (key.startsWith('wiki_') && !key.startsWith('wiki_meta_')) {
                     const title = key.replace('wiki_', '');
+                    const content = localStorage.getItem(key);
+                    // 本文が空の場合は除外
+                    if (!content || content.trim() === '') {
+                        localStorage.removeItem(key);
+                        localStorage.removeItem(`wiki_meta_${title}`);
+                        continue;
+                    }
                     const metaKey = `wiki_meta_${title}`;
                     const meta = JSON.parse(localStorage.getItem(metaKey) || '{"updatedAt": 0}');
                     pages.push({ title, updatedAt: meta.updatedAt });
                 }
             }
 
-            // 絞り込み時はアルファベット順、それ以外は更新日時順（降順）
+            // 以下、既存のソートと表示処理を続ける
             pages.sort((a, b) => {
                 if (filter) {
-                    // 絞り込み時はアルファベット順
                     const normalizedA = normalizeText(a.title);
                     const normalizedB = normalizeText(b.title);
                     return normalizedA.localeCompare(normalizedB, 'ja');
                 } else {
-                    // 絞り込みなし時は更新日時順（新しい順）
                     return b.updatedAt - a.updatedAt;
                 }
             });
 
-            // 以下、既存の処理を続ける
             pages.forEach((page) => {
                 const normalizedTitle = normalizeText(page.title);
                 const normalizedFilter = normalizeText(filter);
@@ -631,7 +626,6 @@
                 pageButtons.push(button);
             });
 
-            // 選択状態を更新
             if (selectedIndex >= 0 && selectedIndex < pageButtons.length) {
                 pageButtons[selectedIndex].classList.add('selected');
             } else {
@@ -643,7 +637,6 @@
         function escapeRegExp(string) {
             return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
-        // 関連ページリストを更新（双方向対応）
         // 関連ページリストを更新（双方向対応、タイトル空除外）
         function updateRelatedPagesList() {
             const textarea = document.getElementById('content-textarea');
