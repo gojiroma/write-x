@@ -550,7 +550,7 @@
                     }
                 }
             }
-            
+
         }
 
         // ページ一覧を表示（絞り込み時はアルファベット順、それ以外は更新日時順）
@@ -583,11 +583,28 @@
                 if (filter) {
                     const normalizedA = normalizeText(a.title);
                     const normalizedB = normalizeText(b.title);
+                    // 日付形式（例: "2/1", "2/10"）を数値比較する
+                    const datePattern = /^(\d+)\/(\d+)$/;
+                    const matchA = normalizedA.match(datePattern);
+                    const matchB = normalizedB.match(datePattern);
+                    if (matchA && matchB) {
+                        const monthA = parseInt(matchA[1], 10);
+                        const dayA = parseInt(matchA[2], 10);
+                        const monthB = parseInt(matchB[1], 10);
+                        const dayB = parseInt(matchB[2], 10);
+                        if (monthA !== monthB) {
+                            return monthA - monthB;
+                        } else {
+                            return dayA - dayB;
+                        }
+                    }
+                    // 日付形式でない場合は通常の文字列比較
                     return normalizedA.localeCompare(normalizedB, 'ja');
                 } else {
                     return b.updatedAt - a.updatedAt;
                 }
             });
+
 
             pages.forEach((page) => {
                 const normalizedTitle = normalizeText(page.title);
@@ -1060,6 +1077,49 @@
         function closeModal() {
             document.getElementById('settings-modal').style.display = 'none';
         }
+        // input要素のダブルクリックで日付挿入
+        document.getElementById('title-input').addEventListener('dblclick', function (e) {
+            const today = new Date();
+            const month = today.getMonth() + 1;
+            const day = today.getDate();
+            const dateStr = `${month}/${day}`;
+            this.value = dateStr;
+            const content = localStorage.getItem(`wiki_${dateStr}`);
+            document.getElementById('content-textarea').value = content || '';
+            document.getElementById('content-textarea').focus();
+        });
+
+        // textarea要素のダブルクリックで日付挿入またはリンク遷移
+        document.getElementById('content-textarea').addEventListener('dblclick', function (e) {
+            const currentLine = getCurrentLine(this);
+            if (currentLine.trim() === '') {
+                const today = new Date();
+                const month = today.getMonth() + 1;
+                const day = today.getDate();
+                const dateStr = `${month}/${day}`;
+                const startPos = this.selectionStart;
+                const endPos = this.selectionEnd;
+                const beforeText = this.value.substring(0, startPos);
+                const afterText = this.value.substring(endPos);
+                this.value = beforeText + dateStr + afterText;
+                this.selectionStart = startPos + dateStr.length;
+                this.selectionEnd = startPos + dateStr.length;
+                savePage();
+            } else if (currentLine.startsWith('http')) {
+                window.open(currentLine, '_blank');
+                this.focus();
+            } else {
+                const pageTitle = currentLine;
+                const content = localStorage.getItem(`wiki_${pageTitle}`);
+                if (content !== null) {
+                    document.getElementById('title-input').value = pageTitle;
+                    this.value = content;
+                    this.focus();
+                    playBeep(880, 0.1);
+                    updateHash(pageTitle, true);
+                }
+            }});
+
 
         // inputの入力時にコンテンツの存在をチェック
         document.getElementById('title-input').addEventListener('input', function (e) {
@@ -1462,6 +1522,7 @@
                 updatePageList('');
                 updateRelatedPagesList();
             }
+
         });
 
         // inputの絞り込み機能（大文字小文字・全角半角・ひらがなカタカナを吸収）
