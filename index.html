@@ -1188,7 +1188,7 @@
                     window.open(searchUrl, '_blank');
                 }
             }
-            // Shiftキーを2回押した時の処理
+            // キーボードショートカットのShift2回押し処理部分
             else if (e.key === 'Shift') {
                 if (shiftKeyPressCount === 0) {
                     shiftKeyPressCount++;
@@ -1208,7 +1208,6 @@
                         const content = localStorage.getItem(`wiki_${dateStr}`);
                         document.getElementById('content-textarea').value = content || '';
                         document.getElementById('content-textarea').focus();
-
                     }
                     // textarea要素でShift2回押し
                     else if (document.activeElement === textareaElement) {
@@ -1232,18 +1231,18 @@
                         } else {
                             const pageTitle = currentLine;
                             const content = localStorage.getItem(`wiki_${pageTitle}`);
-                            if (content !== null) {
-                                document.getElementById('title-input').value = pageTitle;
-                                document.getElementById('content-textarea').value = content;
-                                document.getElementById('content-textarea').focus();
-                                playBeep(880, 0.1);
-                                updateHash(pageTitle, true);
-                            }
+                            // 存在しないページでも空欄で遷移するように修正
+                            document.getElementById('title-input').value = pageTitle;
+                            document.getElementById('content-textarea').value = content || '';
+                            document.getElementById('content-textarea').focus();
+                            playBeep(880, 0.1);
+                            updateHash(pageTitle, true);
                         }
                     }
                     shiftKeyPressCount = 0;
                 }
             }
+
             // Ctrl+Sでエクスポート
             else if (e.ctrlKey && e.key === 's') {
                 e.preventDefault();
