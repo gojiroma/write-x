@@ -1521,6 +1521,52 @@
                 updatePageList('');
                 updateRelatedPagesList();
             }
+            // Command+Enterで行頭記号をトグル
+            else if (document.activeElement === textareaElement && (e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                const textarea = document.getElementById('content-textarea');
+                const startPos = textarea.selectionStart;
+                const endPos = textarea.selectionEnd;
+                const text = textarea.value;
+                const lines = text.split('\n');
+                let currentLineIndex = 0;
+                let charCount = 0;
+
+                // カーソルがある行を特定
+                for (let i = 0; i < lines.length; i++) {
+                    const lineLength = lines[i].length + 1; // 改行文字分
+                    if (startPos <= charCount + lineLength) {
+                        currentLineIndex = i;
+                        break;
+                    }
+                    charCount += lineLength;
+                }
+
+                const currentLine = lines[currentLineIndex];
+                let newLine;
+
+                // 行頭記号のトグル
+                if (currentLine.startsWith('✅ ')) {
+                    newLine = currentLine.replace('✅ ', '⛏ ');
+                } else if (currentLine.startsWith('⛏ ')) {
+                    newLine = currentLine.replace('⛏ ', '');
+                } else {
+                    newLine = '✅ ' + currentLine;
+                }
+
+                // 行を置換
+                lines[currentLineIndex] = newLine;
+                textarea.value = lines.join('\n');
+
+                // カーソル位置を調整
+                const newCursorPos = startPos + (newLine.length - currentLine.length);
+                textarea.selectionStart = newCursorPos;
+                textarea.selectionEnd = newCursorPos;
+
+                savePage();
+                updateRelatedPagesList();
+            }
+
 
         });
 
