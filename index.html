@@ -1547,9 +1547,9 @@
 
                 // 行頭記号のトグル
                 if (currentLine.startsWith('✅ ')) {
-                    newLine = currentLine.replace('✅ ', '⛏ ');
-                } else if (currentLine.startsWith('⛏ ')) {
-                    newLine = currentLine.replace('⛏ ', '');
+                    newLine = currentLine.replace('✅ ', '▶︎ ');
+                } else if (currentLine.startsWith('▶︎ ')) {
+                    newLine = currentLine.replace('▶︎ ', '');
                 } else {
                     newLine = '✅ ' + currentLine;
                 }
